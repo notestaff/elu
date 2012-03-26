@@ -299,11 +299,11 @@ such as $5 into the canonical form `5 dollars'.  Each hook must take a string as
 (defun convert-elu-valu-ratio (old-valu-ratio new-valu-ratio)
   "Convert a valu ratio to new units, e.g. minutes per day to hours per week.  We keep the denominator of the new ratio,
 changing only the numerator."
-  (let ((new-num (elu-valu-ratio-num new-valu-ratio))
+  (let ((new-num (elu-valu-ratio-numer new-valu-ratio))
 	(new-denom (elu-valu-ratio-denom new-valu-ratio)))
     (make-elu-valu-ratio
      :numer (new-elu-valu (/ (elu-valu-val (convert-elu-valu
-					    (elu-valu-ratio-num old-valu-ratio)
+					    (elu-valu-ratio-numer old-valu-ratio)
 					    (elu-valu-unit new-num)))
 			     (elu-valu-val (convert-elu-valu
 					    (elu-valu-ratio-denom old-valu-ratio)
