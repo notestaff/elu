@@ -37,8 +37,8 @@
 
 (defgroup elu-valu nil
   "Options for the elu-valu package"
-  :tag "Org Balance"
-  :group 'org
+  :tag "ELU - Emacs Lisp Utilities"
+  :group 'elu
   :link '(url-link "http://sourceforge.net/projects/org-balance/"))
 
 (defrxxcustom elu-valu-units
