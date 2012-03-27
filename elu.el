@@ -748,11 +748,37 @@ Shorthand for (let ((var1 var1) (var2 var2)) forms)."
 (defstruct elu-loc
   "A buffer and a position in that buffer.  Unlike for a marker, the position is not
 updated as the buffer is edited, so you can created as many of these as you want without
-slowing down emacs and not worry about manually disposing of them after use.
+slowing down emacs and not worry about manually disposing of them after use
+(see URL http://www.gnu.org/software/emacs/manual/html_node/elisp/Overview-of-Markers.html#Overview-of-Markers ).
 It also stores the filename of the buffer when available, so the location makes sense
 even if the file gets closed.
 "
+;; store also the creation timestamp, so we know this becomes invalid if the file gets modified?
+;; or at least, store buffer-chars-modified-tick and buffer-modified-tick here?
+
   buf pos filename)
+
+(defun point-elu-loc ()
+  "Return an `elu-loc' pointing to the current point."
+  (make-elu-loc :buf (current-buffer) :pos (point)))
+
+(defun elu-goto (loc)
+  "Got to a location, which can be a position in the current buffer, a marker,
+or an `elu-loc'."
+  (cond
+   ((integerp loc) (goto-char loc))
+   ((markerp loc)
+    (switch-to-buffer (marker-buffer loc))
+    (goto-char (marker-position loc)))
+   ((elu-loc-p loc)
+    (switch-to-buffer (elu-loc-buf loc))
+    (goto-char (elu-loc-pos loc)))
+   ((error "elu-goto: invalid loc %s" loc))))
+  
+
+(defstruct elu-range
+  "A range of locations within one buffer."
+  buffer beg end)
 
 
 (defun elu-add-font-lock-keywords()

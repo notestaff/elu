@@ -139,7 +139,7 @@ units are measured; for example, for time we use minutes."
 				     (if (stringp unit-name) (intern unit-name) unit-name)))))
 	    val unit)
 
-(defun elu-valu-scale-valu (factor valu)
+(defun scale-elu-valu (factor valu)
   "Return the value scaled by the factor"
   (elu-modified-struct 'elu-valu valu
     :val (* factor val)))
@@ -173,10 +173,6 @@ a newly created valu representing the sum of VALU1 and VALU2."
     (new-elu-valu (+ (elu-valu-val conv1)
 		     (elu-valu-val conv2))
 		  smaller-unit)))
-
-(defun scale-elu-valu (factor valu)
-  "Return the value scaled by the factor"
-  (new-elu-valu (* factor (elu-valu-val valu)) (elu-valu-unit valu)))
 
 (defun sub-elu-valu (valu1 valu2)
   "Subtract two values with units, converting them to a common unit.  Returns
@@ -295,6 +291,11 @@ such as $5 into the canonical form `5 dollars'.  Each hook must take a string as
 (defrxx valu-ratio "A ratio of valus such as 1 hour per week"
   (sep-by blanks (valu numer) ratio-word (valu denom))
   (make-elu-valu-ratio :numer numer :denom denom))
+
+(defun scale-elu-valu-ratio (factor elu-valu-ratio)
+  "Multiply a valu ratio by a factor"
+  (make-elu-valu-ratio :numer (scale-elu-valu factor (elu-valu-ratio-numer elu-valu-ratio))
+		       :denom (elu-valu-ratio-denom elu-valu-ratio)))
 
 (defun convert-elu-valu-ratio (old-valu-ratio new-valu-ratio)
   "Convert a valu ratio to new units, e.g. minutes per day to hours per week.  We keep the denominator of the new ratio,
