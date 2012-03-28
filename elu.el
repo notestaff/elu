@@ -612,6 +612,14 @@ ERROR-MESSAGE is the symbol `nil-ok', in which case just return nil.
 	(error
 	 (list (if error-message error-message (format "Key %s not in alist %s" key alist))))))))
 
+(defmacro elu-case-sensitive (&rest body)
+  "Execute BODY with casen-sensitivity turned on"
+  `(let ((case-fold-search t)) ,body))
+
+(defmacro elu-case-insensitive (&rest body)
+  "Execute BODY with casen-sensitivity turned off"
+  `(let (case-fold-search) ,body))
+
 
 (defun elu-format-seconds (string seconds)
   "Use format control STRING to format the number SECONDS.
@@ -751,16 +759,45 @@ updated as the buffer is edited, so you can created as many of these as you want
 slowing down emacs and not worry about manually disposing of them after use
 (see URL http://www.gnu.org/software/emacs/manual/html_node/elisp/Overview-of-Markers.html#Overview-of-Markers ).
 It also stores the filename of the buffer when available, so the location makes sense
-even if the file gets closed.
-"
-;; store also the creation timestamp, so we know this becomes invalid if the file gets modified?
-;; or at least, store buffer-chars-modified-tick and buffer-modified-tick here?
+even if the file gets closed.  It also stores the value of `buffer-chars-modified-tick' at the time
+of creation, so it can detect when it is no longer valid."
+  (buffer (current-buffer) :read-only t)
+  (position (point) :read-only t)
+  (filename (buffer-file-name) :read-only t)
+  (chars-modified-tick (buffer-chars-modified-tick) :read-only t))
 
-  buf pos filename)
+(defun elu-loc-valid-p (loc)
+  "Test whether the given location LOC (a marker or an elu-loc) is still valid."
+  (cond
+   ((markerp loc) (buffer-live-p (marker-buffer loc)))
+   ((elu-loc-p loc)
+    (elu-with 'elu-loc loc (buffer)
+      (and (buffer-live-p buffer)
+	   (= (buffer-chars-modified-tick buffer)
+	      (elu-loc-chars-modified-tick loc)))))
+   ((error "elu-loc-valid-p got invalid loc %s" loc))))
 
 (defun point-elu-loc ()
   "Return an `elu-loc' pointing to the current point."
-  (make-elu-loc :buf (current-buffer) :pos (point)))
+  (make-elu-loc))
+
+(defun point-min-elu-loc ()
+  "Return an elu-loc for (point-min)"
+  (make-elu-loc :position (point-min)))
+
+(defun point-max-elu-loc ()
+  "Return an elu-loc for (point-max)"
+  (make-elu-loc :position (point-max)))
+
+(defstruct
+  (elu-loc-range
+   (:constructor nil)
+   (:constructor
+    make-elu-loc-range
+    (beg end &optional buffer)))
+  
+  "A contiguous range of locations within one buffer."
+  beg end (buffer (current-buffer)))
 
 (defun elu-goto (loc)
   "Got to a location, which can be a position in the current buffer, a marker,
@@ -771,15 +808,19 @@ or an `elu-loc'."
     (switch-to-buffer (marker-buffer loc))
     (goto-char (marker-position loc)))
    ((elu-loc-p loc)
-    (switch-to-buffer (elu-loc-buf loc))
-    (goto-char (elu-loc-pos loc)))
+    (switch-to-buffer (elu-loc-buffer loc))
+    (goto-char (elu-loc-position loc)))
+   ((elu-loc-range-p loc)
+    (elu-with 'elu-loc-range loc (buffer beg end)
+      (switch-to-buffer buffer)
+      (widen)
+      (narrow-to-region (elu-loc-position beg)
+			(elu-loc-position end))
+      (goto-char (point-min))))
    ((error "elu-goto: invalid loc %s" loc))))
   
 
-(defstruct elu-range
-  "A range of locations within one buffer."
-  buffer beg end)
-
+;;;;;;;;;;;;;;;;;;;
 
 (defun elu-add-font-lock-keywords()
   "Make some elu macros look like keywords in font lock"
