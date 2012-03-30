@@ -718,14 +718,18 @@ SAVES-THEN-FORMS is a list of save- forms to call, without the save- prefix;
 followed by the list of forms to wrap in these save- calls.
 "
   (declare (indent defun))
-  (flet ((elu-save-recurs
-	  (&rest saves-then-forms)
-	  (let ((first-save (car-safe saves-then-forms)))
-	    (if (not (memq first-save '(excursion window-excursion restriction match-data)))
-		(cons 'progn saves-then-forms)
-	      (list (intern (concat "save-" (symbol-name first-save)))
-		    (apply 'elu-save-recurs (cdr saves-then-forms)))))))
-    (apply 'elu-save-recurs saves-then-forms)))
+  (let (restriction-saved)
+    (flet ((elu-save-recurs
+	    (&rest saves-then-forms)
+	    (let ((first-save (car-safe saves-then-forms)))
+	      (if (not (memq first-save '(excursion window-excursion restriction match-data current-buffer)))
+		  (cons 'progn saves-then-forms)
+		(when (eq first-save 'restriction) (setq restriction-saved t))
+		(when (and (eq first-save 'excursion) restriction-saved)
+		  (error "elu-save: excursion should be saved before restriction, according to `save-restriction' docs"))
+		(list (intern (concat "save-" (symbol-name first-save)))
+		      (apply 'elu-save-recurs (cdr saves-then-forms)))))))
+      (apply 'elu-save-recurs saves-then-forms))))
 
 ;; add a general elu-chain thing for chaining symbols.  elu-save can then call that.
 
