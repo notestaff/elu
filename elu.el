@@ -803,20 +803,22 @@ of creation, so it can detect when it is no longer valid."
   "A contiguous range of locations within one buffer."
   beg end (buffer (current-buffer)))
 
-(defun elu-goto (loc)
+(defun* elu-goto (loc &optional (buffer-switch-fn 'switch-to-buffer))
   "Got to a location, which can be a position in the current buffer, a marker,
-or an `elu-loc'."
+or an `elu-loc'.  BUFFER-SWITCH-FN gives the function to use for switching
+buffers (either `switch-to-buffer' or`set-buffer')."
+  (unless loc (message "no loc??" ) (backtrace) (error "loc required"))
   (cond
    ((integerp loc) (goto-char loc))
    ((markerp loc)
-    (switch-to-buffer (marker-buffer loc))
+    (funcall buffer-switch-fn (marker-buffer loc))
     (goto-char (marker-position loc)))
    ((elu-loc-p loc)
-    (switch-to-buffer (elu-loc-buffer loc))
+    (funcall buffer-switch-fn (elu-loc-buffer loc))
     (goto-char (elu-loc-position loc)))
    ((elu-loc-range-p loc)
     (elu-with 'elu-loc-range loc (buffer beg end)
-      (switch-to-buffer buffer)
+      (funcall buffer-switch-fn buffer)
       (widen)
       (narrow-to-region (elu-loc-position beg)
 			(elu-loc-position end))
