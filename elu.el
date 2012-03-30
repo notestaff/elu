@@ -206,7 +206,6 @@ Copied from `mapcar*'.
 	  (nreverse cl-res)))
     (mapcar cl-func cl-x))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: XEmacs compatibility functions
@@ -825,6 +824,48 @@ buffers (either `switch-to-buffer' or`set-buffer')."
       (goto-char (point-min))))
    ((error "elu-goto: invalid loc %s" loc))))
   
+
+(defmacro elu-cache-at-point (prop form)
+  ;; add option to use buffere-chars-modified-tick or buffer-modified-tick or another tick routine
+  ;; add a macro that ignores new updates for this symbol so clear the cache(?)  but then future updates
+  ;; do not matter for the purposes of this macro.
+
+  ;; also have option to cache the results in a user-provided space.
+  ;; and to invalidate the cache only if a given range of the file changes.
+  ;; (so, we add a text property that, on change
+
+  ;;
+  ;; or just use first-change-hook
+
+  ;;
+  ;; check xemacs compatibility .  always safe to just not cache.
+
+;;   modification-hooks
+;; If a character has the property modification-hooks, then its value should be a list of functions; modifying that character calls all of those functions. Each function receives two arguments: the beginning and end of the part of the buffer being modified. Note that if a particular modification hook function appears on several characters being modified by a single primitive, you can't predict how many times the function will be called.
+;; If these functions modify the buffer, they should bind inhibit-modification-hooks to t around doing so, to avoid confusing the internal mechanism that calls these hooks.
+
+;; Overlays also support the modification-hooks property, but the details are somewhat different (see Overlay Properties). 
+
+;; insert-in-front-hooks
+;; insert-behind-hooks
+;; The operation of inserting text in a buffer also calls the functions listed in the insert-in-front-hooks property of the following character and in the insert-behind-hooks property of the preceding character. These functions receive two arguments, the beginning and end of the inserted text. The functions are called after the actual insertion takes place.
+;; See also Change Hooks, for other hooks that are called when you change text in a buffer. 
+  ;;
+
+  ;; make sure to bind inhibit-modification-hooks as needed here, esp. since removing the cache property
+  ;; counts as a modification.
+  
+  "Cache the result of form"
+  (elu-with-new-symbols (saved saved-tick saved-val cur-val cur-tick)
+    `(let* ((,saved (get-text-property (point) ,prop))
+	    (,saved-tick (car-safe ,saved))
+	    (,saved-val (cdr-safe ,saved))
+	    (,cur-tick (buffer-chars-modified-tick)))
+       (if (equal ,saved-tick ,cur-tick) ,saved-val
+	 (let* ((,cur-val ,form) inhibit-modification-hooks)
+	   (put-text-property (point) (1+ (point)) ,prop
+			      (cons ,cur-tick ,cur-val))
+	   ,cur-val)))))
 
 ;;;;;;;;;;;;;;;;;;;
 
