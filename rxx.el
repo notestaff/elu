@@ -1274,19 +1274,29 @@ the parsed result in case of match, or nil in case of mismatch."
 		 rxx-object)
 	    (rxx-call-parser rxx-info (match-string 0))))))
 
-(defmacro rxx-do-search-fwd (aregexp var &rest forms)
+(defmacro rxx-do-search-fwd (namespace symbol var &rest forms)
   "Searches forward from point for matches to rxx AREGEXP, and evalutes FORMS
 at each match after parsing the match into variable VAR.  If VAR is nil, 
 creates a dummy var."
   (declare (indent 2))
-  (unless var (setq var (make-symbol "dummy-var")))
-  `(let (,var) (while (setq ,var (rxx-search-fwd ,(rxx-symbol aregexp) (not 'boundary) 'no-error))
-		 ,@forms)))
+  `(let (,(or var (make-symbol "dummy-var")))
+     (while
+	 (setq ,var
+	       (rxx-search-fwd (symbol-value
+				(rxx-get-symbol-local-var (quote ,symbol) (quote ,namespace))) (not 'boundary) 'no-error))
+       ,@forms)))
 
 (defmacro rxx-parse-string (namespace symbol string &optional partial-match-ok error-ok)
   `(rxx-parse (symbol-value (rxx-get-symbol-local-var (quote ,symbol) (quote ,namespace)))
 	      ,string
 	      ,partial-match-ok ,error-ok))
+
+
+(defmacro rxx-parse-string-func (namespace symbol string &optional partial-match-ok error-ok)
+  `(rxx-parse (symbol-value (rxx-get-symbol-local-var ,symbol ,namespace))
+	      ,string
+	      ,partial-match-ok ,error-ok))
+
 
 (defun rxx-parse-fwd-one (aregexp &optional bound partial-match-ok)
   (save-match-data
@@ -1310,22 +1320,31 @@ creates a dummy var."
 
 
 
-(defun* rxx-parse-fwd (aregexps &optional bound partial-match-ok)
-  (let (ok-results nil-results error-results (aregexps (elu-make-seq aregexps)))
-    (dolist (aregexp aregexps)
-      (condition-case err
-	  (let* ((rxx-marker (point-marker))  ;; FIXME release marker when done
-		 (the-str (buffer-substring-no-properties (point) (or bound (point-max))))
-		 (result (rxx-parse aregexp the-str
-				    partial-match-ok (not 'error-ok))))
-	    (if result
-		(push result ok-results)
-	      (push result nil-results)))
-	(error (push err error-results))))
-    (if ok-results (first ok-results)
-      (if nil-results nil
-	(let ((err (first error-results)))
-	  (signal (car err) (cdr err)))))))
+(defmacro rxx-parse-fwd (namespace symbol &optional bound partial-match-ok)
+  "Parse from point until BOUND looking for a match to regexp defined by SYMBOL
+in namespace NAMESPACE."
+
+  `(let ((rxx-marker (point-marker)))  ;; FIXME release marker when done
+     (rxx-parse-string (quote ,namespace) (quote ,symbol)
+		       (buffer-substring-no-properties (point) (or ,bound (point-max)))
+		       ,partial-match-ok (not 'error-ok))))
+
+;; (defun* rxx-parse-fwd-orig (aregexps &optional bound partial-match-ok)
+;;   (let (ok-results nil-results error-results (aregexps (elu-make-seq aregexps)))
+;;     (dolist (aregexp aregexps)
+;;       (condition-case err
+;; 	  (let* ((rxx-marker (point-marker))  ;; FIXME release marker when done
+;; 		 (the-str (buffer-substring-no-properties (point) (or bound (point-max))))
+;; 		 (result (rxx-parse aregexp the-str
+;; 				    partial-match-ok (not 'error-ok))))
+;; 	    (if result
+;; 		(push result ok-results)
+;; 	      (push result nil-results)))
+;; 	(error (push err error-results))))
+;;     (if ok-results (first ok-results)
+;;       (if nil-results nil
+;; 	(let ((err (first error-results)))
+;; 	  (signal (car err) (cdr err)))))))
 
 
 

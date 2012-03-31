@@ -107,3 +107,4 @@
 
 
 
+(rxx-parse-string org-balance inactive-timestamp "[2010-09-28 Tue 16:11]")

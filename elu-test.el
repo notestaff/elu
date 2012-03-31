@@ -52,5 +52,5 @@
 
 ; (kill-local-variable 'elu-valu-number-name-range-rxx-def-local)
 ; (rxx-kill-local-vars)
-(rxx-parse-string elu-valu valu-range "2-3 hours")
+(rxx-parse-string elu-valu valu "0")
 

@@ -224,14 +224,14 @@ Parsed as the numeric value of the number."
   (lambda (match)
     (or number-name (string-to-number match))))
 
-(defun elu-valu-is-valid-number-p (s)
-  "Test if s is a number or a string representing a valid number (ignoring leading or trailing whitespace).
-The whole string must match a floating-point number optionally surrounded by whitespace; extraneous characters in string
-are not allowed.
-"
-  (if (numberp s) s
-    (save-match-data
-      (elu-full-match elu-valu-number-regexp s))))
+;; (defun elu-valu-is-valid-number-p (s)
+;;   "Test if s is a number or a string representing a valid number (ignoring leading or trailing whitespace).
+;; The whole string must match a floating-point number optionally surrounded by whitespace; extraneous characters in string
+;; are not allowed.
+;; "
+;;   (if (numberp s) s
+;;     (save-match-data
+;;       (elu-full-match elu-valu-number-regexp s))))
 
 (defun elu-valu-string-to-number (s)
   "Convert a string to a number, recognizing some number names for readability.  If s is already a number, just return it.
@@ -239,7 +239,7 @@ Unlike the standard `string-to-number', if the string as a whole cannot be inter
 by whitespace, it throws an error rather than silently returning zero.
 "
   (if (numberp s) s
-    (rxx-parse elu-valu-number-regexp s)))
+    (rxx-parse-string elu-valu number s)))
 
 (defalias 'elu-valu-parse-number 'elu-valu-string-to-number)
 
@@ -273,7 +273,7 @@ such as $5 into the canonical form `5 dollars'.  Each hook must take a string as
   "Given a string representing a value with units, parse it into an elu-valu structure."
   (or
    (run-hook-with-args-until-success 'elu-valu-parse-valu-hooks valu-str)
-   (rxx-parse elu-valu-valu-regexp valu-str)))
+   (rxx-parse-string elu-valu valu valu-str)))
 
 (def-rxx elu-valu valu-range
   "Value range"
