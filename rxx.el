@@ -783,7 +783,8 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
       (when (and (symbolp var)
 		 (elu-ends-with (symbol-name var) "-rxx-def-local"))
 	(kill-local-variable var)
-	(push var vars-killed)))))
+	(push var vars-killed)))
+    (message "%s rxx local vars killed: %s" (length vars-killed) vars-killed)))
 
 
 
@@ -955,7 +956,7 @@ return the list of parsed numbers, omitting the blanks.   See also
 	  (elu-dbg grp-name rxx-infos)
 	  (let ((new-parser
 		 `(lambda (match-str)
-		    (let ((rxx-prefix ,(elu-when-bound rxx-prefix)))
+		    (let ((rxx-cur-namespace (quote ,(elu-when-bound rxx-cur-namespace))))
 		      (elu-dbg match-str)
 		      (let ((repeat-form '(seq)) repeat-grp-names parse-result )
 			(while (not parse-result)
@@ -1325,7 +1326,7 @@ creates a dummy var."
 in namespace NAMESPACE."
 
   `(let ((rxx-marker (point-marker)))  ;; FIXME release marker when done
-     (rxx-parse-string (quote ,namespace) (quote ,symbol)
+     (rxx-parse-string-func (quote ,namespace) (quote ,symbol)
 		       (buffer-substring-no-properties (point) (or ,bound (point-max)))
 		       ,partial-match-ok (not 'error-ok))))
 
