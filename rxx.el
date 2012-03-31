@@ -199,10 +199,6 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
       (setq regexp (replace-match "?:" 'fixedcase 'literal regexp 1))))
     (rxx-check-regexp-valid regexp)))
 
-(defun rxx-group-if (regexp)
-  ""
-  )
-      
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: rxx-info
@@ -359,6 +355,98 @@ passed in as AREGEXP or scoped in as RXX-AREGEXP. "
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+;; Section: Handling buffer-local bindings of regexps
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun rxx-symbol-p (symbol)
+  "Tells whether the symbol is bound to an rxx regexp"
+  )
+
+;;
+;; problem: how do we deal with modules?
+;; we need here some kind of lexical scoping.
+
+;; when a variable is defined, at that point we could
+;; save its module name with it.
+;; but, the thing is, when looking up a symbol for reevaluation,
+;; what should the modules be?
+
+;; so, module now becomes part of the regexp.
+;; it's a bit like a closure.
+;; so then, when the regexp needs recomputing,
+
+;; so, this needs to become part of the environment.
+;; rxx-to-string will
+
+;; but, what happens during compilation?
+
+
+;; or, we could say that we'll give the module-name explicitly when defining the variable.
+;; then the eval order does not matter as much.
+;; then, in the structure we store the definition and the module name.
+;; this is what gets stored in the compiled file.   so this does not rely on storing eg text props there.
+
+;;
+;; now, when this is evaluated, we'll know the module name.
+;; so, to lookup a symbol, we can prepend the module name.
+
+;; now, how would importing work here?
+
+;;    - we could disallow importing
+;;    - a module could define a constant with the names it exports.
+;;      (which would be useful anyway).
+;;      defrxx could then be passed that constant.
+;;
+;;    - defrxx can be extended to allow defining a collection of things at once,
+;;      and then they can share the module name.
+
+;;    so, as a result of all this, definitions become independent.
+;;    you can re-evaluate one, and it will make sense on its own.
+
+;; so, to recap:
+
+;;    - defrxx stores, in a global variable, a definition,
+;;      together with modules etc
+
+;;    - rxx-parse-fwd can be a macro which takes the module name and the
+;;      var name, and looks at the regexp value.
+
+;;   - since we no longer need to eval things at compile-time, things become simple
+;;   - module namespace can be stored in a var, which can include the namespace name
+;;     and any imports.  so, imports are stored there in one place.
+
+;;  - the rxx definition can get this var, and glue it.
+;;  - rxx-parse-fwd then just gets the var, which has been constructed with the module in mind.
+
+;;  - rxx-parse-fwd can be a macro which looks at the symbol name
+;;  - so, the rxx definition reads the variable defining the module.  referencing vars defined
+;;    earlier in the file is fine; their values stay global.
+
+;;  - ok, this looks like a reasonable design.
+
+;;    - if no local value yet (and the var name there can be -local-regexp),
+;;      then call
+
+;;
+;;    - we could pass the module name at the top-level call.
+;;      no, but then the definition we have would not be valid.
+;;
+;;    - we could include the relevant modules as part of the definition.
+;;
+;;
+
+;;   --> or, we could just get rid of the module system for the moment.
+;;    which might make things clearer and possibly safer.
+
+;;
+;; if we're interpreting an expression,
+;;
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 ;; Section: Parsing the result of a regexp match into a programmatic object
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -453,6 +541,92 @@ passed in via AREGEXP or scoped in via RXX-AREGEXP."
 ;; Section: A simple module system for aregexp names
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defstruct rxx-namespace
+  "A namespaces for regexps.
+
+Fields:
+
+   NAME - the name of this namespace
+   MEMBERS - the names of the rxx-regexps in this namespace.
+   IMPORTS - the names of any imported namespaces
+"
+  name members imports)
+
+(defun rxx-namespace-global-var (name)
+  "Construct the name of the global var storing the given namespace"
+  (intern (concat (symbol-name name) "-rxx-namespace")))
+
+(defmacro* def-rxx-namespace (name &key import)
+  "Define an rxx namespace."
+  `(defconst ,(rxx-namespace-global-var name)
+     (make-rxx-namespace :name (quote ,name) :imports ,(elu-make-seq import))))
+
+(defstruct
+  (rxx-def
+   (:constructor nil)
+   (:constructor make-rxx-def
+		 (&key namespace name descr form parser
+		       &aux (dummy
+			     (elu-with 'rxx-namespace
+				 (symbol-value
+				  (rxx-namespace-global-var namespace))
+				 (members)
+			       (unless (memq name members)
+				 (push name members)))))))
+  "The definition of an rxx regexp.
+
+Fields:
+
+   NAMESPACE - the namespace to which this rxx-def belongs
+   DESCR - the description of this rxx
+   FORM - the form defining this rxx
+   PARSER - the parser for this rxx
+"
+  namespace form parser descr)
+
+
+(defun rxx-def-global-var (namespace name)
+  "Construct the name of the global var storing the given rxx-def"
+  (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
+
+(defmacro* def-rxx (namespace name descr form &optional (parser 'identity))
+  "Defeine an rxx regexp."
+  `(defconst ,(rxx-def-global-var namespace name)
+     (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
+		   :form (quote ,form) :parser (quote ,parser))
+     ,descr))
+
+
+(defun rxx-get (symbol)
+  "Get the correct rxx for the symbol"
+  ;; ah, but this rxx-get needs to be what is invoked where rxx-symbol is now.
+  ;; so this does need to be a rewrite not just an external thing.
+
+  ;; need to look in rxx-cur-namespace,
+
+  ;; so, there is always a "current namespace".
+  ;; if we lookup a symbol, and need to get its definition, then
+  ;; we get that symbol's namespace.
+
+  (unless (local-variable-p symbol)
+    ;; build what is needed
+    (elu-with 'rxx-def (symbol-value symbol) (namespace form parser descr)
+      (let* ((rxx-cur-namespace namespace)
+	     (the-rxx (rxx-to-string form parser descr)))
+	(set (make-local-variable symbol) the-rxx))))
+  symbol)
+
+(defmacro rxx-parse-fwd-macro (namespace name result &rest forms)
+  ;; so, from namespace and name we can ask rxx-get to get the value
+  ;; to give to rxx-parse, which will then call string-match and then
+  ;; call the parser to parse the result and we can assign that to result here.
+
+  ;; so, just need to make rxx-to-string do the right thing.
+  ;; ok this is doable, just need to write this all down.
+  `(rxx-parse-fwd-func    )
+  )
+
 
 (defmacro rxx-start-module (prefix)
   "Specify a prefix to be automatically prepended to aregexps defined by `defrxx'.  Typically this would be the
@@ -1112,7 +1286,7 @@ creates a dummy var."
   (let (ok-results nil-results error-results (aregexps (elu-make-seq aregexps)))
     (dolist (aregexp aregexps)
       (condition-case err
-	  (let* ((rxx-marker (point-marker))
+	  (let* ((rxx-marker (point-marker))  ;; FIXME release marker when done
 		 (the-str (buffer-substring-no-properties (point) (or bound (point-max))))
 		 (result (rxx-parse aregexp the-str
 				    partial-match-ok (not 'error-ok))))
