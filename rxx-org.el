@@ -3,6 +3,44 @@
 
 (def-rxx-namespace org)
 
+;; should this be def-rxx-regexp instead?
+
+;; so, next thing will be:
+;; to make a routine that takes a namespace name and regexp name,
+;; and returns the fully constructed regexp and its parser.
+
+;; add error checking etc:
+
+;;    -- when doing imports, make sure conflicting symbols are not imported from different namespaces
+;;    -- when adding a symbol to a namespace, make sure it does not conflict with ones imported
+;;    (or say it will override them?)
+
+;;    -- in an expr, allow specifying a symbol's namespace, as in (from-namespace namespace symbol).
+;;    -- in :import, allow specifying particular symbols to import from a namespace, or :except to import everything
+;;       except given ones.
+;;    
+
+;; it will be called by the top-level functions such as rxx-string-match and rxx-parse etc,
+;; but also where currently rxx-symbol is called.
+
+;; what it will do is:
+
+;;   - check if there is a buffer-local non-void setting for this already; if yes, just return that.
+;;   - if not, we'll compute the result then store it buffer-locally.
+;;   - to compute the result:
+;;       - bind rxx-cur-namespace to the namespace
+;;       - call rxx-to-string on the global definition of the symbol
+
+;;         when that encounters a symbol and needs to know if the symbol is an aregexp,
+;;         it will check rxx-cur-namespace and its imports, and look for the symbol there.
+
+;;    - if namespace is not specified, get the scoped-in one (error if not there).
+;;
+
+;
+; afterward, replace all uses of advice with elu-flet.
+;
+
 (def-rxx org priority-char "A priority character.  Parsed as the priority char."
    (eval-regexp (format "[%s-%s]" org-highest-priority org-lowest-priority)))
 
