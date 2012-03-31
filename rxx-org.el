@@ -1,7 +1,12 @@
 
 (require 'rxx)
+(require 'elu-valu)
 
-(def-rxx-namespace org)
+(def-rxx-namespace org
+  "Org mode expressions"
+  :imports elu-valu
+  :exports (priority-char priority-cookie)
+  )
 
 ;; should this be def-rxx-regexp instead?
 
@@ -41,39 +46,58 @@
 ; afterward, replace all uses of advice with elu-flet.
 ;
 
+; so, this way, the expressions do not refer to each other -- they're just symbols.
+; now, when we need to interpret them, at that point we do that by constructing symbol names
+; according to the standard convention.
+; so the binding is as late as possible.
+; and, 
+
 (def-rxx org priority-char "A priority character.  Parsed as the priority char."
    (eval-regexp (format "[%s-%s]" org-highest-priority org-lowest-priority)))
 
 (def-rxx org priority-cookie "A priority cookie.  Parsed as the priority char."
   (seq "[#" priority-char "]") priority-char)
 
-(defrxx org tag-name "Tag name, parses as tag name" (1+ (any alnum "_@#%")))
-(defrxx org tags "List of tags.  Parses as list of tags."  (& blanks? (opt ":" (1+ (& tag-name ":")) eol)) tag-name-list)
 
-(defrxx org stars "Stars at start of headline.  Parses as the level, taking odd-only into account."
-  (seq bol (0+ (named-grp star "*") :sep-by (if org-odd-levels-only "*" "")))
-  (length star-list))
+;; so, one solution is to have the module explicitly define a const containing the exported regexps.
+;; that's not such a bad solution, and is what i had before.
 
-(defrxx org todo "A todo keyword" (eval-words org-todo-keywords-1))
+;; so, in the same clause where it says import, we can say what we export.
+;; now, this is not quite ideal as import is implementation detail and export is the interface.
+;; but this would definitely be usable and probably safe.
 
-(defrxx org headline-text "Headline text" (1+ nonl))
-(defrxx org stats-cookie "statistics cookie" (seq "[" alnum "/" alnum "]"))
+;; now, otherwise, where will we put things?
+;; suppose we do def-rxx-namespace as eval-and-compile.
 
-(defrxx org headline (sep-by blanks stars priority? todo? headline-text stats-cookie? tags?) 'parse-as-struct)
+;; another could be to use defvar.  
 
-;; special support for multi-line regexps?
+;; (defrxx org tag-name "Tag name, parses as tag name" (1+ (any alnum "_@#%")))
+;; (defrxx org tags "List of tags.  Parses as list of tags."  (& blanks? (opt ":" (1+ (& tag-name ":")) eol)) tag-name-list)
+
+;; (defrxx org stars "Stars at start of headline.  Parses as the level, taking odd-only into account."
+;;   (seq bol (0+ (named-grp star "*") :sep-by (if org-odd-levels-only "*" "")))
+;;   (length star-list))
+
+;; (defrxx org todo "A todo keyword" (eval-words org-todo-keywords-1))
+
+;; (defrxx org headline-text "Headline text" (1+ nonl))
+;; (defrxx org stats-cookie "statistics cookie" (seq "[" alnum "/" alnum "]"))
+
+;; (defrxx org headline (sep-by blanks stars priority? todo? headline-text stats-cookie? tags?) 'parse-as-struct)
+
+;; ;; special support for multi-line regexps?
 			     
-(defrxxnamespace org-balance :import (org elu-valu))
-(defrxx org-balance goal-headline (replace-grp headline todo (eval-words org-balance-goal-keywords)) 'parse-as-struct)
+;; (defrxxnamespace org-balance :import (org elu-valu))
+;; (defrxx org-balance goal-headline (replace-grp headline todo (eval-words org-balance-goal-keywords)) 'parse-as-struct)
 
-;; allow (defrxx org-balance (def1) (def2))
+;; ;; allow (defrxx org-balance (def1) (def2))
 
-(defrxx org-balance link "An Org link. Parsed as an elu-loc at the target of the link."
-  (named-grp link (eval-regexp (rxx-make-shy org-any-link-re)))
-  (elu-save excursion restriction window-excursion match-data
-    (goto-char (rxx-match-beginning 'link))
-    (org-balance-open-at-point)
-    (point-elu-loc)))
+;; (defrxx org-balance link "An Org link. Parsed as an elu-loc at the target of the link."
+;;   (named-grp link (eval-regexp (rxx-make-shy org-any-link-re)))
+;;   (elu-save excursion restriction window-excursion match-data
+;;     (goto-char (rxx-match-beginning 'link))
+;;     (org-balance-open-at-point)
+;;     (point-elu-loc)))
 
 ;; so then, need to implement get-symbol that takes a namespace and a name in it,
 ;; as well as, separately, that just takes a name and uses the current scoped-in namespace.

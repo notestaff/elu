@@ -247,7 +247,7 @@ how it was constructed (`rxx-info')."
   regexp info)
 
 (defun get-rxx-info (aregexp)
-  "Extract rxx-info from regexp string AREGEXP,
+  "Extract rxx-info from regexp struct AREGEXP,
 if there, otherwise return nil."
   (when (rxx-p aregexp)
     (rxx-info aregexp)))
@@ -548,47 +548,44 @@ passed in via AREGEXP or scoped in via RXX-AREGEXP."
 Fields:
 
    NAME - the name of this namespace
-   MEMBERS - the names of the rxx-regexps in this namespace.
+   EXPORTS - the names of the rxx-regexps in this namespace.
    IMPORTS - the names of any imported namespaces
 "
-  name members imports)
+  name exports imports)
 
 (defun rxx-namespace-global-var (name)
   "Construct the name of the global var storing the given namespace"
   (intern (concat (symbol-name name) "-rxx-namespace")))
 
-(defmacro* def-rxx-namespace (name &key import)
+(defmacro* def-rxx-namespace (name descr &key imports exports)
   "Define an rxx namespace."
   `(defconst ,(rxx-namespace-global-var name)
-     (make-rxx-namespace :name (quote ,name) :imports ,(elu-make-seq import))))
+     (make-rxx-namespace :name (quote ,name) :imports (quote ,(elu-make-seq imports))
+			 :exports (quote ,(elu-make-seq exports)))
+     ,descr))
 
 (defstruct
-  (rxx-def
-   (:constructor nil)
-   (:constructor make-rxx-def
-		 (&key namespace name descr form parser
-		       &aux (dummy
-			     (elu-with 'rxx-namespace
-				 (symbol-value
-				  (rxx-namespace-global-var namespace))
-				 (members)
-			       (unless (memq name members)
-				 (push name members)))))))
+  rxx-def
   "The definition of an rxx regexp.
 
 Fields:
 
    NAMESPACE - the namespace to which this rxx-def belongs
+   NAME - name of the aregexp
    DESCR - the description of this rxx
    FORM - the form defining this rxx
    PARSER - the parser for this rxx
 "
-  namespace form parser descr)
+  namespace name descr form parser)
 
 
 (defun rxx-def-global-var (namespace name)
   "Construct the name of the global var storing the given rxx-def"
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
+
+(defun rxx-def-local-var (namespace name)
+  "Construct the name of the buffer-local var storing the given rxx-def"
+  (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def-local")))
 
 (defmacro* def-rxx (namespace name descr form &optional (parser 'identity))
   "Defeine an rxx regexp."
@@ -598,8 +595,27 @@ Fields:
      ,descr))
 
 
-(defun rxx-get (symbol)
-  "Get the correct rxx for the symbol"
+;; allow importing a namespace for just part of a regexp
+
+(defun* rxx-get-symbol-local-var (symbol &optional namespace)
+  "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
+  (declare (special rxx-cur-namespace))
+  (let ((rxx-cur-namespace (or namespace rxx-cur-namespace)))
+    (dolist (test-namespace (cons rxx-cur-namespace (rxx-namespace-imports
+						     (symbol-value
+						      (rxx-namespace-global-var
+						       rxx-cur-namespace)))))
+      (let ((rxx-def-test-var (rxx-def-global-var test-namespace symbol)))
+	(when (boundp rxx-def-test-var)
+	  (let ((rxx-def-local (rxx-def-local-var test-namespace symbol)))
+	    (unless (local-variable-p rxx-def-local)
+	      (elu-with 'rxx-def (symbol-value rxx-def-test-var) (namespace form parser descr)
+	      (let* ((rxx-cur-namespace namespace)
+		     (the-rxx (rxx-to-string form parser descr)))
+		  (set (make-local-variable rxx-def-local) the-rxx))))
+	    (return-from rxx-get-symbol-local-var rxx-def-local)))))))
+	
+    
   ;; ah, but this rxx-get needs to be what is invoked where rxx-symbol is now.
   ;; so this does need to be a rewrite not just an external thing.
 
@@ -609,13 +625,6 @@ Fields:
   ;; if we lookup a symbol, and need to get its definition, then
   ;; we get that symbol's namespace.
 
-  (unless (local-variable-p symbol)
-    ;; build what is needed
-    (elu-with 'rxx-def (symbol-value symbol) (namespace form parser descr)
-      (let* ((rxx-cur-namespace namespace)
-	     (the-rxx (rxx-to-string form parser descr)))
-	(set (make-local-variable symbol) the-rxx))))
-  symbol)
 
 (defmacro rxx-parse-fwd-macro (namespace name result &rest forms)
   ;; so, from namespace and name we can ask rxx-get to get the value
@@ -694,9 +703,8 @@ the parsed object matched by this named group."
 	  (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
 	  (grp-def
 	   (or (and (symbolp grp-def-raw)
-		    (boundp (rxx-symbol grp-def-raw))
-		    (get-rxx-info (symbol-value (rxx-symbol grp-def-raw))))
-	       (and (eq (car-safe grp-def-raw) 'regexp)
+		    (get-rxx-info (symbol-value (rxx-get-symbol-local-var grp-def-raw))))
+	       (and (eq (car-safe grp-def-raw) 'regexp)  ; FIXME
 		    (get-rxx-info (second grp-def-raw)))
 	       (and (eq (car-safe grp-def-raw) 'eval-regexp)
 		    (get-rxx-info (eval (second grp-def-raw))))
@@ -755,14 +763,29 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
 
     (when (and (symbolp form) (elu-ends-with (symbol-name form) "?"))
       (setq form (list 'opt (intern (substring (symbol-name form) 0 -1)))))
-    (cond ((and (consp form) (symbolp (first form)) (boundp (rxx-symbol (first form)))
-		(get-rxx-info (symbol-value (rxx-symbol (first form)))))
-	   (setq ad-return-value (rxx-process-named-grp (list 'named-grp (second form) (rxx-symbol (first form))))))
-	  ((and (symbolp form) (boundp (rxx-symbol form)) (boundp 'rxx-env) (not (rxx-env-lookup (rxx-symbol form) rxx-env))
-		(get-rxx-info (symbol-value (rxx-symbol form))))
+    (cond ((and (consp form) (symbolp (first form))
+		(get-rxx-info (symbol-value (rxx-get-symbol-local-var (first form)))))
+	   (setq ad-return-value (rxx-process-named-grp (list 'named-grp (second form)
+							      ;; FIXME
+							      ;; here need to call that calls rxx-to-string
+							      (first form)))))
+	  ((and (symbolp form) (rxx-get-symbol-local-var form) (boundp 'rxx-env) (not (rxx-env-lookup (rxx-get-symbol-local-var form) rxx-env))
+		(get-rxx-info (symbol-value (rxx-get-symbol-local-var form))))
 	   (setq ad-return-value
 		 (rxx-process-named-grp (list 'named-grp form form))))
 	  (t ad-do-it))))
+
+(defun rxx-kill-local-vars ()
+  "Kill local rxx vars"
+  (interactive)
+  (let (vars-killed)
+    (dolist (var (delq nil (mapcar 'car-safe (buffer-local-variables))) vars-killed)
+      (when (and (symbolp var)
+		 (elu-ends-with (symbol-name var) "-rxx-def-local"))
+	(kill-local-variable var)
+	(push var vars-killed)))))
+
+
 
 (defadvice rx-submatch (before rxx-submatch first (form) activate compile)
   "Keep a count of the number of non-shy subgroups, so that when a named
@@ -1259,6 +1282,11 @@ creates a dummy var."
   (unless var (setq var (make-symbol "dummy-var")))
   `(let (,var) (while (setq ,var (rxx-search-fwd ,(rxx-symbol aregexp) (not 'boundary) 'no-error))
 		 ,@forms)))
+
+(defmacro rxx-parse-string (namespace symbol string &optional partial-match-ok error-ok)
+  `(rxx-parse (symbol-value (rxx-get-symbol-local-var (quote ,symbol) (quote ,namespace)))
+	      ,string
+	      ,partial-match-ok ,error-ok))
 
 (defun rxx-parse-fwd-one (aregexp &optional bound partial-match-ok)
   (save-match-data

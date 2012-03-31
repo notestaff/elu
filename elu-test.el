@@ -48,5 +48,9 @@
   
   (should (equal (elu-gen-vector i 5 i) '[0 1 2 3 4])))
 
+(set (make-local-variable 'elu-valu-number-names) '((one . 1) (two . 2)))
 
+; (kill-local-variable 'elu-valu-number-name-range-rxx-def-local)
+; (rxx-kill-local-vars)
+(rxx-parse-string elu-valu valu-range "2-3 hours")
 
