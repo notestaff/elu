@@ -56,13 +56,6 @@
 ;;
 ;; Implementation notes:
 ;;
-;; This module defines advice for a number of functions in `rx.el'.
-;; This advice only changes the behavior of these functions when
-;; called through `rxx-to-string'; if not, these pieces of advice
-;; do nothing.   So no behavior is changed for code that just uses
-;; the original `rx' macro, even when `rxx' module is loaded.
-;; 
-
 ;; Extension to the `rx' macro for writing readable regexps; adds parsing of named subexpressions.
 ;; In effect lets you define and parse grammars.
 
@@ -743,8 +736,13 @@ the parsed object matched by this named group."
     (incf rxx-num-grps (rxx-opt-depth regexp))
     (concat "\\(?:" (rx-group-if (rxx-regexp-string regexp) rx-parent) "\\)")))
 
+(declare-function rx-form-orig "rxx.el" t 'fileonly)
+(declare-function rx-submatch-orig "rxx.el" t 'fileonly)
+(declare-function rx-regexp-orig "rxx.el" t 'fileonly)
+(declare-function rx-kleene-orig "rxx.el" t 'fileonly)
 
-(defadvice rx-form (around rxx-form first (form &optional rx-parent) activate compile)
+
+(defun rxx-form (form &optional rx-parent)
   "Handle named subexpressions.  Any symbol whose variable value
 is an aregexp (e.g.  one defined by `defrxx') can be used as a
 form.  More specifically: if R is a symbol whose variable value
@@ -758,22 +756,17 @@ can be abbreviated (see `rxx-symbol').
 Also, R? is translated to (opt R) for a slight reduction in verbosity.
 "
   (declare (special rxx-env))
-  (if (not (boundp 'rxx-env))
-      ad-do-it
-
-    (when (and (symbolp form) (elu-ends-with (symbol-name form) "?"))
-      (setq form (list 'opt (intern (substring (symbol-name form) 0 -1)))))
-    (cond ((and (consp form) (symbolp (first form))
-		(get-rxx-info (symbol-value (rxx-get-symbol-local-var (first form)))))
-	   (setq ad-return-value (rxx-process-named-grp (list 'named-grp (second form)
-							      ;; FIXME
-							      ;; here need to call that calls rxx-to-string
-							      (first form)))))
-	  ((and (symbolp form) (rxx-get-symbol-local-var form) (boundp 'rxx-env) (not (rxx-env-lookup (rxx-get-symbol-local-var form) rxx-env))
-		(get-rxx-info (symbol-value (rxx-get-symbol-local-var form))))
-	   (setq ad-return-value
-		 (rxx-process-named-grp (list 'named-grp form form))))
-	  (t ad-do-it))))
+  (when (and (symbolp form) (elu-ends-with (symbol-name form) "?"))
+    (setq form (list 'opt (intern (substring (symbol-name form) 0 -1)))))
+  (cond ((and (consp form) (symbolp (first form))
+	      (get-rxx-info (symbol-value (rxx-get-symbol-local-var (first form)))))
+	 (rxx-process-named-grp (list 'named-grp (second form)
+				      (first form))))
+	((and (symbolp form) (rxx-get-symbol-local-var form) (boundp 'rxx-env)
+	      (not (rxx-env-lookup (rxx-get-symbol-local-var form) rxx-env))
+	      (get-rxx-info (symbol-value (rxx-get-symbol-local-var form))))
+	 (rxx-process-named-grp (list 'named-grp form form)))
+	(t (rx-form-orig form rx-parent))))
 
 (defun rxx-kill-local-vars ()
   "Kill local rxx vars"
@@ -788,16 +781,21 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
 
 
 
-(defadvice rx-submatch (before rxx-submatch first (form) activate compile)
+(defun rxx-submatch (form)
   "Keep a count of the number of non-shy subgroups, so that when a named
 group is created (see `rxx-process-named-grp'), we will know the regexp group
 number to which it corresponds."
-  (when (boundp 'rxx-num-grps) (incf rxx-num-grps)))
+  (declare (special rxx-num-grps))
+  (incf rxx-num-grps)
+  (rx-submatch-orig form))
 
-(defadvice rx-regexp (after rxx-regexp first (form) activate compile)
+(defun rxx-regexp-replacement (form)
   "Update our count of non-shy subgroups to include any subgroups of the
 regexp inserted here."
-  (when (boundp 'rxx-num-grps) (incf rxx-num-grps (rxx-opt-depth (second form)))))
+  (declare (special rxx-num-grps))
+  (prog1
+      (rx-regexp-orig form)
+    (incf rxx-num-grps (rxx-opt-depth (second form)))))
 
 (defun rxx-process-sep-by (form)
   "Process the sep-by form, which looks like (sep-by separator ....)"
@@ -852,7 +850,7 @@ Used for bottoming out bounded recursion (see `rxx-process-recurse').")
 ;;      (regexp-opt (cdr form)))
 ;;    (and (memq rx-parent '(: * t)) rx-parent)))
 
-(defadvice rx-or (around rxx-or first (form) )
+(defun rxx-or (form)
   "When called via `rxx-to-string', modify `rx-or' behavior
 as described below.
 
@@ -869,15 +867,14 @@ splitting up a large regexp into an OR of more manageable chunks.
 Also, force each clause of the OR, as well as the whole expression,
 to be wrapped in shy groups; this can prevent unexpected behaviors.
 "
-  (if (not (in-rxx)) ad-do-it
-    (let (clause-results)
-      (elu-do-seq (clause i (cdr form))
-	  (let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
-		(rxx-or-child (cons i rxx-or-child)))
-	    (push (rx-group-if (rx-form clause '|) '*) clause-results)
-			       ))
-    )
-  
+  (declare (special rxx-or-num) (special rxx-or-branch)
+	   (special rxx-or-child))
+  (let (clause-results)
+    (elu-do-seq (clause i (cdr form))
+	(let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
+	      (rxx-or-child (cons i rxx-or-child)))
+	  (push (rx-group-if (rx-form clause '|) '*) clause-results)))))
+
   ;; (unless (or (not (boundp 'rxx-env))
   ;; 	      (and (boundp 'rxx-recurs-depth) (> rxx-recurs-depth 0))
   ;; 	      (<= (length form) 2))
@@ -887,11 +884,10 @@ to be wrapped in shy groups; this can prevent unexpected behaviors.
   ;; 		      (and (eq (car-safe elem) 'named-grp)
   ;; 			   (eq (elu-caaddr-safe elem) 'recurse))))
   ;; 			  form)))
-  ))
 
 (defvar rx-greedy-flag)
 
-(defadvice rx-kleene (around rxx-kleene first (form) activate)
+(defun rxx-kleene (form)
   "When processing repeat constructs such as `zero-or-more' and `one-or-more',
 turn each named group GRP inside the repeat into a corresponding named group GRP-LIST
 whose parser returns the list of parsed individual matches.   So, a construct
@@ -910,10 +906,10 @@ return the list of parsed numbers, omitting the blanks.   See also
 `rxx-process-sep-by'.
 "
   (declare (special rxx-env rxx-num-grps))
-  (if (or (not (boundp 'rxx-env)) (not (boundp 'rxx-num-grps))
-	  (memq (first form) '(optional opt zero-or-one ? ??)))
-      ad-do-it
-    (let* ((wrap-grp-num (when (boundp 'rxx-num-grps) (incf rxx-num-grps)))
+  (if (memq (first form) '(optional opt zero-or-one ? ??))
+      (rx-kleene-orig form)
+    (let* (return-value
+	   (wrap-grp-num (when (boundp 'rxx-num-grps) (incf rxx-num-grps)))
 	   (rxx-num-grps (elu-when-bound rxx-num-grps))
 	   (parent-rxx-env (elu-when-bound rxx-env))
 	   (rxx-env (rxx-new-env parent-rxx-env))
@@ -935,14 +931,13 @@ return the list of parsed numbers, omitting the blanks.   See also
 			    (first form))
 			  sep-by-form
 			  (list 'regexp body-regexp)))))
-	      ad-do-it
-	      ad-return-value))
+	      (setq return-value (rx-kleene-orig form))))
 	   (greedy-p (or (memq (first form) '(* + ?\s))
 			 (and rx-greedy-flag (memq (first form) '(zero-or-more 0+ one-or-more 1+ >= repeat **))))))
-
+      
       (when sep-by-form
 	(setq
-	 ad-return-value
+	 return-value
 	 (rx-to-string
 	   (ecase (first form)
 	     ((1+ one-or-more + +?)
@@ -950,14 +945,12 @@ return the list of parsed numbers, omitting the blanks.   See also
 	     ((0+ zero-or-more * *?)
 	      `(,(first form) (regexp ,body-regexp) (regexp ,body-repeat-regexp)))))))
 
-      (setq ad-return-value (format "\\(%s\\)" (rxx-make-shy ad-return-value)))
+      (setq return-value (format "\\(%s\\)" (rxx-make-shy return-value)))
       (progn
 	(do-rxx-env grp-name rxx-infos rxx-env
-	  (elu-dbg grp-name rxx-infos)
 	  (let ((new-parser
 		 `(lambda (match-str)
 		    (let ((rxx-cur-namespace (quote ,(elu-when-bound rxx-cur-namespace))))
-		      (elu-dbg match-str)
 		      (let ((repeat-form '(seq)) repeat-grp-names parse-result )
 			(while (not parse-result)
 			  (when (and repeat-grp-names ,have-sep-by)
@@ -966,7 +959,6 @@ return the list of parsed numbers, omitting the blanks.   See also
 			    (elu-push-end new-grp-name repeat-grp-names)
 			    (elu-push-end (list 'named-grp new-grp-name
 						(quote (seq ,@(cdr form-sans-sep-by)))) repeat-form)
-			    (elu-dbg repeat-form new-grp-name repeat-grp-names)
 			    (save-match-data
 			      (setq parse-result
 				    (rxx-parse
@@ -980,7 +972,8 @@ return the list of parsed numbers, omitting the blanks.   See also
 		      parse-result)))))
 	    (rxx-env-bind (intern (concat (symbol-name grp-name) "-list"))
 			  (make-rxx-info :parser new-parser :env (rxx-new-env) :num wrap-grp-num)
-			  parent-rxx-env)))))))
+			  parent-rxx-env))))
+      return-value)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -999,55 +992,46 @@ in a modular fashion using regular expressions.
 
 For detailed description, see `rxx'.
 "
-  (let* ((rxx-env (rxx-new-env))
-	 (rxx-num-grps 0)
-	 rxx-or-branch
-	 rxx-or-child
-	 (rxx-or-num 0)
-	 ;; extend the syntax understood by `rx-to-string' with named groups and backrefs
-	 (rx-constituents (append '((named-grp . (rxx-process-named-grp 1 nil))
-				    (eval-regexp . (rxx-process-eval-regexp 1 1))
-				    (shy-grp . seq)
-				    (& . seq)
-				    (blanks . "\\(?:[[:blank:]]+\\)")
-				    (digits . "\\(?:[[:digit:]]+\\)")
-				    (space . "\\s-")
-				    (sep-by . (rxx-process-sep-by 1 nil))
-				    (recurse . (rxx-process-recurse 1 nil))
-				    (named-group . named-grp) (shy-group . shy-grp)
-				    (named-backref . (rxx-process-named-backref 1 1)))
-				  rx-constituents))
-	 
-	 ;; also allow named-group or ngrp or other names
-	 ;; var: regexp - the string regexp for the form.
-	 (regexp
-	  ;; whenever the rx-to-string call below encounters a (named-grp ) construct
-	  ;; in the form, it calls back to rxx-process-named-grp, which will
-	  ;; add a mapping from the group's name to rxx-grp structure
-	  ;; to rxx-name2grp.
-	  (rxx-remove-unneeded-shy-grps
-	   (rxx-replace-posix (rx-to-string form 'no-group))))
-	 (rxx-info (make-rxx-info
-		    :form form :parser (or parser
-					   'identity)
-		    :env rxx-env :descr descr)))
-    (assert (= rxx-num-grps (regexp-opt-depth regexp)))
-    (rxx-check-regexp-valid regexp)
-    (make-rxx :regexp regexp :info rxx-info)))
-
-(defun in-rxx ()
-  "Test if we're in rxx, i.e. if we got here through a call
-to `rxx-to-string'.  Used by pieces of advice to avoid changing
-any behavior unless called through this module.
-
-The use of this function means we specifically do NOT want
-to declare `rxx-env' as a global variable using `defvar';
-we only want it to be defined when we're being called via
-`rxx-to-string'.
-"
-  (declare (special rxx-env))
-  (boundp 'rxx-env))
-
+  (elu-flet ((rx-form rxx-form)
+	     (rx-submatch rxx-submatch)
+	     (rx-regexp rxx-regexp-replacement)
+	     (rx-kleene rxx-kleene))
+	     
+    (let* ((rxx-env (rxx-new-env))
+	   (rxx-num-grps 0)
+	   rxx-or-branch
+	   rxx-or-child
+	   (rxx-or-num 0)
+	   ;; extend the syntax understood by `rx-to-string' with named groups and backrefs
+	   (rx-constituents (append '((named-grp . (rxx-process-named-grp 1 nil))
+				      (eval-regexp . (rxx-process-eval-regexp 1 1))
+				      (shy-grp . seq)
+				      (& . seq)
+				      (blanks . "\\(?:[[:blank:]]+\\)")
+				      (digits . "\\(?:[[:digit:]]+\\)")
+				      (space . "\\s-")
+				      (sep-by . (rxx-process-sep-by 1 nil))
+				      (recurse . (rxx-process-recurse 1 nil))
+				      (named-group . named-grp) (shy-group . shy-grp)
+				      (named-backref . (rxx-process-named-backref 1 1)))
+				    rx-constituents))
+	   
+	   ;; also allow named-group or ngrp or other names
+	   ;; var: regexp - the string regexp for the form.
+	   (regexp
+	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
+	    ;; in the form, it calls back to rxx-process-named-grp, which will
+	    ;; add a mapping from the group's name to rxx-grp structure
+	    ;; to rxx-name2grp.
+	    (rxx-remove-unneeded-shy-grps
+	     (rxx-replace-posix (rx-to-string form 'no-group))))
+	   (rxx-info (make-rxx-info
+		      :form form :parser (or parser
+					     'identity)
+		      :env rxx-env :descr descr)))
+      (assert (= rxx-num-grps (regexp-opt-depth regexp)))
+      (rxx-check-regexp-valid regexp)
+      (make-rxx :regexp regexp :info rxx-info))))
 
 (defmacro rxx (form &optional parser descr)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
@@ -1209,16 +1193,16 @@ the parsed result in case of match, or nil in case of mismatch."
   
   (unless s (error "rxx-parse: nil string"))
   (save-match-data
-      (let* ((rxx-info (or (get-rxx-info aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
-	     (error-msg (format "Error parsing \`%s\' as %s" s
-				(or (rxx-info-descr rxx-info) (rxx-info-form rxx-info)))))
-	
-	;; so, what you need here is just:
-	;;   -- if full match, then parse and be done.
-	;;   -- if no match, go to the next.
-	;; if partial match ok, longer partial match is generally better.
-	;; so, possibly, match each string.  (or only when rxx-longest-match-p is true?)
-	
+    (let* ((rxx-info (or (get-rxx-info aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
+	   (error-msg (format "Error parsing \`%s\' as %s" s
+			      (or (rxx-info-descr rxx-info) (rxx-info-form rxx-info)))))
+      
+      ;; so, what you need here is just:
+      ;;   -- if full match, then parse and be done.
+      ;;   -- if no match, go to the next.
+      ;; if partial match ok, longer partial match is generally better.
+      ;; so, possibly, match each string.  (or only when rxx-longest-match-p is true?)
+      
       (if (not (string-match (rxx-regexp aregexp) s))
 	  (unless error-ok (error "%s: No match" error-msg))
 	(let (no-parse)
