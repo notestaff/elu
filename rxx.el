@@ -344,100 +344,6 @@ passed in as AREGEXP or scoped in as RXX-AREGEXP. "
       (or aregexp (elu-when-bound rxx-aregexp)
 	  (error "The annotated regexp must be either passed in explicitly, or scoped in as `rxx-aregexp'")))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Section: Handling buffer-local bindings of regexps
-;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defun rxx-symbol-p (symbol)
-  "Tells whether the symbol is bound to an rxx regexp"
-  )
-
-;;
-;; problem: how do we deal with modules?
-;; we need here some kind of lexical scoping.
-
-;; when a variable is defined, at that point we could
-;; save its module name with it.
-;; but, the thing is, when looking up a symbol for reevaluation,
-;; what should the modules be?
-
-;; so, module now becomes part of the regexp.
-;; it's a bit like a closure.
-;; so then, when the regexp needs recomputing,
-
-;; so, this needs to become part of the environment.
-;; rxx-to-string will
-
-;; but, what happens during compilation?
-
-
-;; or, we could say that we'll give the module-name explicitly when defining the variable.
-;; then the eval order does not matter as much.
-;; then, in the structure we store the definition and the module name.
-;; this is what gets stored in the compiled file.   so this does not rely on storing eg text props there.
-
-;;
-;; now, when this is evaluated, we'll know the module name.
-;; so, to lookup a symbol, we can prepend the module name.
-
-;; now, how would importing work here?
-
-;;    - we could disallow importing
-;;    - a module could define a constant with the names it exports.
-;;      (which would be useful anyway).
-;;      defrxx could then be passed that constant.
-;;
-;;    - defrxx can be extended to allow defining a collection of things at once,
-;;      and then they can share the module name.
-
-;;    so, as a result of all this, definitions become independent.
-;;    you can re-evaluate one, and it will make sense on its own.
-
-;; so, to recap:
-
-;;    - defrxx stores, in a global variable, a definition,
-;;      together with modules etc
-
-;;    - rxx-parse-fwd can be a macro which takes the module name and the
-;;      var name, and looks at the regexp value.
-
-;;   - since we no longer need to eval things at compile-time, things become simple
-;;   - module namespace can be stored in a var, which can include the namespace name
-;;     and any imports.  so, imports are stored there in one place.
-
-;;  - the rxx definition can get this var, and glue it.
-;;  - rxx-parse-fwd then just gets the var, which has been constructed with the module in mind.
-
-;;  - rxx-parse-fwd can be a macro which looks at the symbol name
-;;  - so, the rxx definition reads the variable defining the module.  referencing vars defined
-;;    earlier in the file is fine; their values stay global.
-
-;;  - ok, this looks like a reasonable design.
-
-;;    - if no local value yet (and the var name there can be -local-regexp),
-;;      then call
-
-;;
-;;    - we could pass the module name at the top-level call.
-;;      no, but then the definition we have would not be valid.
-;;
-;;    - we could include the relevant modules as part of the definition.
-;;
-;;
-
-;;   --> or, we could just get rid of the module system for the moment.
-;;    which might make things clearer and possibly safer.
-
-;;
-;; if we're interpreting an expression,
-;;
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Parsing the result of a regexp match into a programmatic object
@@ -588,8 +494,6 @@ Fields:
      ,descr))
 
 
-;; allow importing a namespace for just part of a regexp
-
 (defun* rxx-get-symbol-local-var (symbol &optional namespace)
   "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
   (declare (special rxx-cur-namespace))
@@ -608,68 +512,6 @@ Fields:
 		  (set (make-local-variable rxx-def-local) the-rxx))))
 	    (return-from rxx-get-symbol-local-var rxx-def-local)))))))
 	
-    
-  ;; ah, but this rxx-get needs to be what is invoked where rxx-symbol is now.
-  ;; so this does need to be a rewrite not just an external thing.
-
-  ;; need to look in rxx-cur-namespace,
-
-  ;; so, there is always a "current namespace".
-  ;; if we lookup a symbol, and need to get its definition, then
-  ;; we get that symbol's namespace.
-
-
-(defmacro rxx-parse-fwd-macro (namespace name result &rest forms)
-  ;; so, from namespace and name we can ask rxx-get to get the value
-  ;; to give to rxx-parse, which will then call string-match and then
-  ;; call the parser to parse the result and we can assign that to result here.
-
-  ;; so, just need to make rxx-to-string do the right thing.
-  ;; ok this is doable, just need to write this all down.
-  `(rxx-parse-fwd-func    )
-  )
-
-
-(defmacro rxx-start-module (prefix)
-  "Specify a prefix to be automatically prepended to aregexps defined by `defrxx'.  Typically this would be the
-name of the module in which the aregexps are being defined.   So, if you do (rxx-set-prefix my-module) then
-\(defrxx val ...) defines aregexp named my-module-val-regexp; it can be referred to as simply `val' when used
-in larger regexps."
-  `(eval-and-compile
-     (defrxxconst rxx-prefix (when (quote ,prefix) (symbol-name (quote ,prefix)))
-       "Module name to prefix aregexp names with.")))
-
-(defvar rxx-imports nil
-  "Symbols imported from other modules using `rxx-import'.
-An alist mapping imported symbol name to module name.")
-
-(defmacro rxx-import (module &rest symbols)
-  "Import aregexp symbols SYMBOLS from module MODULE so they can be used
-without module name prefix."
-  (elu-with-new-symbols symbol
-  `(eval-and-compile
-     (dolist (,symbol (quote ,symbols))
-       (push (cons ,symbol (symbol-name (quote ,module))) rxx-imports)))))
-
-(defmacro rxx-end-module (prefix)
-  "End the specified module."
-  `(eval-and-compile
-     (assert (equal (symbol-name (quote ,prefix)) rxx-prefix))
-     (rxx-start-module nil)
-     (setq rxx-imports nil)))
-
-(defun rxx-symbol (symbol &optional no-regexp)
-  "If rxx prefix is defined (see `rxx-set-prefix'), and SYMBOL does not
-end with -regexp or -re, return the full name of the symbol (prefix-SYMBOL-regexp).
-If NO-REGEXP is non-nil, do not append the -regexp part and just prepend the prefix."
-  (let ((prefix (or (elu-assoc-val symbol rxx-imports 'nil-ok)
-		    (elu-when-bound rxx-prefix))))
-    (if (and prefix
-	     (not (elu-ends-with (symbol-name symbol) "-regexp"))
-	     (not (elu-ends-with (symbol-name symbol) "-re")))
-	(intern (concat prefix "-" (symbol-name symbol) (if no-regexp "" "-regexp")))
-    symbol)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Handling new `rx' forms, and extended handling of existing forms
@@ -736,11 +578,14 @@ the parsed object matched by this named group."
     (incf rxx-num-grps (rxx-opt-depth regexp))
     (concat "\\(?:" (rx-group-if (rxx-regexp-string regexp) rx-parent) "\\)")))
 
+;; The following functions are created by the `elu-flet' call
+;; in `rxx-to-string', rather than being explicitly defined.
+;; They reference the original functions from the `rx' package
+;; temporarily overridden during the `rxx-to-string' call.
 (declare-function rx-form-orig "rxx.el" t 'fileonly)
 (declare-function rx-submatch-orig "rxx.el" t 'fileonly)
 (declare-function rx-regexp-orig "rxx.el" t 'fileonly)
 (declare-function rx-kleene-orig "rxx.el" t 'fileonly)
-
 
 (defun rxx-form (form &optional rx-parent)
   "Handle named subexpressions.  Any symbol whose variable value
@@ -767,19 +612,6 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
 	      (get-rxx-info (symbol-value (rxx-get-symbol-local-var form))))
 	 (rxx-process-named-grp (list 'named-grp form form)))
 	(t (rx-form-orig form rx-parent))))
-
-(defun rxx-kill-local-vars ()
-  "Kill local rxx vars"
-  (interactive)
-  (let (vars-killed)
-    (dolist (var (delq nil (mapcar 'car-safe (buffer-local-variables))) vars-killed)
-      (when (and (symbolp var)
-		 (elu-ends-with (symbol-name var) "-rxx-def-local"))
-	(kill-local-variable var)
-	(push var vars-killed)))
-    (message "%s rxx local vars killed: %s" (length vars-killed) vars-killed)))
-
-
 
 (defun rxx-submatch (form)
   "Keep a count of the number of non-shy subgroups, so that when a named
@@ -841,15 +673,6 @@ Used for bottoming out bounded recursion (see `rxx-process-recurse').")
     (let ((rxx-recurs-depth (1- rxx-recurs-depth)))
       (rx-group-if (rxx-remove-unneeded-shy-grps (rx-to-string (second form) 'no-group)) '*))))
 
-;; (defun rx-or (form)
-;;   "Parse and produce code from FORM, which is `(or FORM1 ...)'."
-;;   (rx-check form)
-;;   (rx-group-if
-;;    (if (memq nil (mapcar 'stringp (cdr form)))
-;;        (mapconcat (lambda (x) (rx-form x '|)) (cdr form) "\\|")
-;;      (regexp-opt (cdr form)))
-;;    (and (memq rx-parent '(: * t)) rx-parent)))
-
 (defun rxx-or (form)
   "When called via `rxx-to-string', modify `rx-or' behavior
 as described below.
@@ -874,16 +697,6 @@ to be wrapped in shy groups; this can prevent unexpected behaviors.
 	(let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
 	      (rxx-or-child (cons i rxx-or-child)))
 	  (push (rx-group-if (rx-form clause '|) '*) clause-results)))))
-
-  ;; (unless (or (not (boundp 'rxx-env))
-  ;; 	      (and (boundp 'rxx-recurs-depth) (> rxx-recurs-depth 0))
-  ;; 	      (<= (length form) 2))
-  ;;   (setq form (elu-remove-if
-  ;; 		(lambda (elem)
-  ;; 		  (or (eq (car-safe elem) 'recurse)
-  ;; 		      (and (eq (car-safe elem) 'named-grp)
-  ;; 			   (eq (elu-caaddr-safe elem) 'recurse))))
-  ;; 			  form)))
 
 (defvar rx-greedy-flag)
 
@@ -976,8 +789,6 @@ return the list of parsed numbers, omitting the blanks.   See also
       return-value)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Defining aregexps
 ;;
@@ -1033,128 +844,11 @@ For detailed description, see `rxx'.
       (rxx-check-regexp-valid regexp)
       (make-rxx :regexp regexp :info rxx-info))))
 
-(defmacro rxx (form &optional parser descr)
-  "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
-extensions.  The extensions, taken together, allow specifying simple grammars
-in a modular fashion using regular expressions.
-
-The main extension is named groups, specified in FORM as (named-grp NAME FORMS...).
-A named group is analogous to an explicitly numbered group (and is in fact converted
-to one), except that it is referenced by name rather than by number.
-
-As a simple example, you might write things like:
-
-
-; in the returned regexp,
-named groups are represented as explicitly numbered groups, and a mapping of group names to
-group numbers is attached to the returned regexp (as a text property).
-When interpreting the match result, you can use (rxx-match-string GRP-NAME REGEXP)
-to get the text that matched.  Additionally, if the list of forms in the named group
-consists of one aregexp, you can call (rxx-match-val grp-name regexp) to get
-the matched subgroup as a parsed object rather than as a string.
-
-
-to explain:
-   that because we save the form and the parser, we can use this as a sub-regexp.
-the saved form lets us generate new explicit group numbers, and
-the fact that the parser gets its subgroups by name within an environment lets us
-make the parser work with new set of group numbers.
-
-
-The PARSER, if given, is a function that parses the match of this expression
-into an object.  The PARSER function is
-passed one argument, the matched string, and may also call rxx-match-val
-and rxx-match-string with name of named groups in the form to get their values.
-It does not need to pass the regexp to these functions.
-
-DESCR, if given, is used in error messages by `rxx-parse'.
-"
-
-  (let ((r (rxx-to-string form parser descr)))
-    r
-  ))
-
-
-(defmacro defrxx (var &rest args)
-  "Define an annotated regexp (aregexp), and a parser that constructs
-programmatic objects from matches to the regexp.
-
-VAR is the name of the global variable to which the new regexp will be assigned.
-If a module definition is active (see `rxx-start-module'), the variable
-name will be modified by prepending the module name and then -regexp suffix.
-
-ARGS can be one of: (DESCR FORM PARSER), (FORM DESCR PARSER) or (FORM PARSER DESCR).
-See docstring of macro `rxx' for the meaning of these three arguments.
-"
-  (let (form parser descr)
-    (cond
-     ((stringp (nth 0 args))
-      (setq descr (nth 0 args)
-	    form (nth 1 args)
-	    parser (nth 2 args)))
-     ((stringp (nth 1 args))
-      (setq form (nth 0 args)
-	    descr (nth 1 args)
-	    parser (nth 2 args)))
-     (t (setq form (nth 0 args)
-	      parser (nth 1 args)
-	      descr (nth 2 args))))
-    
-    (let* ((aregexp (rxx-to-string form parser descr))
-	   struct-def)
-      (when (eq parser 'struct)
-	(let* ((rxx-info (get-rxx-info aregexp))
-	       (struct-name (symbol-name (rxx-symbol var 'no-regexp)))
-	       (grps (rxx-env-groups (rxx-info-env rxx-info))))
-	  (setf (rxx-info-parser rxx-info)
-		(cons (intern (concat "make-" struct-name))
-		      (apply 'append (mapcar (lambda (field) (list (intern (concat ":" (symbol-name field)))
-								   field))
-					     grps))))
-	  (setq struct-def
-		`(defstruct ,(intern struct-name) ,(or descr "Parsed regexp")
-		   ,@grps))))
-      (list 'progn struct-def
-	    `(defrxxconst ,(rxx-symbol var) ,aregexp ,descr)))))
-
-(defmacro defrxxrecurse (depth var regexp &optional parser descr)
-  "Same as `defrxx', but instantiates any recursive invocations 
-to the specified DEPTH.   See description of the `recuse' form in
-`rxx'."
-  `(defrxxconst ,var ,(let ((rxx-recurs-depth depth))
-			(rxx-to-string regexp parser descr)) ,descr))
-
-
 (defmacro rxxlet* (bindings &rest forms)
   (list 'let* (mapcar (lambda (binding) (list (first binding)
 					      (list 'rxx (second binding) (third binding) (symbol-name (first binding)))))
 		      bindings)
 	(or (car-safe forms) (and bindings (car-safe (car-safe (last bindings)))))))
-
-(defmacro defrxxconst (symbol initvalue &optional docstring)
-  "Define a constant referenced from a `defrxx' definition.
-If `defrxx' forms are evaluated at compile-time,
-any variables they reference need to be made visible at
-compile-time as well.  Other than making the value visible
-at compile-time, works exactly like a `defconst': defines
-SYMBOL as a constant value INITVALUE, and documents the created
-global variable with the optional DOCSTRING."
-  `(eval-and-compile
-     (defconst ,symbol ,initvalue ,(or docstring ""))))
-
-(defmacro defrxxcustom (symbol initvalue docstring &rest args)
-  "Defines a customization visible at compile-time, so that it
-can be referenced from `defrxx' definitions.   See `defrxxconst'
-for a fuller explanation."
-  `(eval-and-compile
-     (defcustom ,symbol ,initvalue ,docstring ,@args)))
-
-
-(defmacro defrxxstruct (var regexp &optional parser descr)
-  `(progn
-     (defrxxconst ,var ,regexp ,parser ,descr)
-     ;; need to get the list of top-level groups here.
-     (defstruct ,(rxx-symbol var 'no-regexp) ,@(rxx-env-groups (rxx-info-env (get-rxx-info (eval (rxx-symbol var))))))))
 
 (defun rxx-add-font-lock-keywords ()
   (when (featurep 'font-lock)
@@ -1179,10 +873,6 @@ for a fuller explanation."
 ;; User-callable functions for searching and parsing aregexps.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defvar rxx-longest-match-p nil
-  "When non-nil, make extra efforts to find the longest match rather than
-just any match.  Affects `rxx-parse', etc.  See also `posix-search-forward'.")
 
 (defun* rxx-parse (aregexp s &optional partial-match-ok error-ok)
   "Match the string against the given extended regexp, and return
@@ -1282,29 +972,6 @@ creates a dummy var."
 	      ,string
 	      ,partial-match-ok ,error-ok))
 
-
-(defun rxx-parse-fwd-one (aregexp &optional bound partial-match-ok)
-  (save-match-data
-    (save-excursion
-      (rxx-search-fwd aregexp bound (not 'noerror) partial-match-ok))))
-
-
-(defun* rxx-parse-fwd-old (aregexps &optional bound partial-match-ok)
-  (let (ok-results nil-results error-results (aregexps (elu-make-seq aregexps)))
-    (dolist (aregexp aregexps)
-      (condition-case err
-	  (let ((result (rxx-parse-fwd-one aregexp bound partial-match-ok)))
-	    (if result
-		(push result ok-results)
-	      (push result nil-results)))
-	(error (push err error-results))))
-    (if ok-results (first ok-results)
-      (if nil-results nil
-	(let ((err (first error-results)))
-	  (signal (car err) (cdr err)))))))
-
-
-
 (defmacro rxx-parse-fwd (namespace symbol &optional bound partial-match-ok)
   "Parse from point until BOUND looking for a match to regexp defined by SYMBOL
 in namespace NAMESPACE."
@@ -1314,63 +981,30 @@ in namespace NAMESPACE."
 		       (buffer-substring-no-properties (point) (or ,bound (point-max)))
 		       ,partial-match-ok (not 'error-ok))))
 
-;; (defun* rxx-parse-fwd-orig (aregexps &optional bound partial-match-ok)
-;;   (let (ok-results nil-results error-results (aregexps (elu-make-seq aregexps)))
-;;     (dolist (aregexp aregexps)
-;;       (condition-case err
-;; 	  (let* ((rxx-marker (point-marker))  ;; FIXME release marker when done
-;; 		 (the-str (buffer-substring-no-properties (point) (or bound (point-max))))
-;; 		 (result (rxx-parse aregexp the-str
-;; 				    partial-match-ok (not 'error-ok))))
-;; 	    (if result
-;; 		(push result ok-results)
-;; 	      (push result nil-results)))
-;; 	(error (push err error-results))))
-;;     (if ok-results (first ok-results)
-;;       (if nil-results nil
-;; 	(let ((err (first error-results)))
-;; 	  (signal (car err) (cdr err)))))))
-
-
-
 (defun rxx-parse-bwd (aregexp &optional bound partial-match-ok)
   "Match the current buffer against the given extended regexp, and return
 the parsed result in case of match, or nil in case of mismatch."
   ;; add options to:
   ;;   - work with re-search-forward and re-search-bwd.
   ;;
-  (save-match-data
-    (save-excursion
-      (let ((old-point (point))
-	    (rxx-info (or (get-rxx-info aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp))))
-	(if (and (re-search-backward (rxx-regexp aregexp) bound 'noerror)
-		 (or partial-match-ok
-		     (and (= (match-beginning 0) bound)
-			  (= (match-end 0) old-point))))
-	    (let* ((rxx-env (rxx-info-env rxx-info))
-		   rxx-object)
-	      (rxx-call-parser rxx-info (match-string 0)))
-	  (error "Error parsing \`%s\' as %s" (if (and bound (>= bound old-point) (< (- bound old-point) 100))
-						  (buffer-substring old-point bound)
-						"buffer text")
-		 (or (rxx-info-descr rxx-info) (rxx-info-form rxx-info))))))))
+  (elu-save match-data excursion
+    (let ((old-point (point))
+	  (rxx-info (or (get-rxx-info aregexp)
+			(error "Need annotated regexp returned by `rxx'; got `%s'" aregexp))))
+      (if (and (re-search-backward (rxx-regexp aregexp) bound 'noerror)
+	       (or partial-match-ok
+		   (and (= (match-beginning 0) bound)
+			(= (match-end 0) old-point))))
+	  (let* ((rxx-env (rxx-info-env rxx-info))
+		 rxx-object)
+	    (rxx-call-parser rxx-info (match-string 0)))
+	(error "Error parsing \`%s\' as %s" (if (and bound (>= bound old-point) (< (- bound old-point) 100))
+						(buffer-substring old-point bound)
+					      "buffer text")
+	       (or (rxx-info-descr rxx-info) (rxx-info-form rxx-info)))))))
 
 
-(defun rxx-parse-recurs (aregexp s max-recurs-depth &optional partial-match-ok)
-  (let* ((rxx-recurs-depth max-recurs-depth)
-	 (unwound-aregexp (rxx-to-string `(named-grp top-grp
-						     ,aregexp))))
-    (rxx-parse (rxx-to-string unwound-aregexp) s partial-match-ok)))
-
-;; additional forms:
-;;   seq-any-order
-;;   sep-by-any-order
-;;
-;; debug/better-error-messaging facilities
-;; enumerate matches
-;; default parsers: if only one named grp, the value of that; if two or more, make a struct with these fields as names.
-
-;; better support for defining these things at runtime.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defstruct rxx-parsed-obj
   "An object that was parsed from a text string.
@@ -1382,6 +1016,16 @@ Fields:
 "
   loc text)
 
+(defun rxx-kill-local-vars ()
+  "Kill local rxx vars"
+  (interactive)
+  (let (vars-killed)
+    (dolist (var (delq nil (mapcar 'car-safe (buffer-local-variables))) vars-killed)
+      (when (and (symbolp var)
+		 (elu-ends-with (symbol-name var) "-rxx-def-local"))
+	(kill-local-variable var)
+	(push var vars-killed)))
+    (message "%s rxx local vars killed: %s" (length vars-killed) vars-killed)))
 
 (provide 'rxx)
 
