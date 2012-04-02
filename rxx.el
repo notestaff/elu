@@ -808,7 +808,8 @@ For detailed description, see `rxx'.
 	     (rx-regexp rxx-regexp-replacement)
 	     (rx-kleene rxx-kleene))
 	     
-    (let* ((rxx-env (rxx-new-env))
+    (let* ((max-lisp-eval-depth (max max-lisp-eval-depth 1200))
+	   (rxx-env (rxx-new-env))
 	   (rxx-num-grps 0)
 	   rxx-or-branch
 	   rxx-or-child
