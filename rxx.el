@@ -184,7 +184,6 @@ Taken from `subregexp-context-p'."
   "Return a new regexp that makes all groups in REGEXP shy; and
 wrap a shy group around the returned REGEXP.  WARNING: this will
 kill any backrefs!  Adapted from `regexp-opt-depth'."
-  ;; FIXME: check for backrefs, throw error if any present
   (save-match-data
     (assert (not (string-match "\\\\[1-9]" regexp))
 	    nil "rxx-make-shy: does not work on regexps with backrefs")
@@ -207,7 +206,9 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
     (while (and (string-match "\\\\(\\(\\)[^?]" regexp)
 		(rxx-subregexp-context-p regexp (match-beginning 0)))
       (setq regexp (replace-match "?:" 'fixedcase 'literal regexp 1))))
-    (rxx-check-regexp-valid regexp)))
+    (rxx-check-regexp-valid regexp)
+    (assert (zerop (rxx-opt-depth regexp)))
+    regexp))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -270,28 +271,18 @@ Fields:
        `rxx-inst' for the subgroup.
      NUM - the numbered group corresponding to to matches of this regexp (as would be passed to `match-string').
 "
-  def env num)
+  def env num regexp)
 
 (defun rxx-inst-form (rxx-inst) (rxx-def-form (rxx-inst-def rxx-inst)))
 (defun rxx-inst-parser (rxx-inst) (rxx-def-parser (rxx-inst-def rxx-inst)))
 (defun rxx-inst-descr (rxx-inst) (rxx-def-descr (rxx-inst-def rxx-inst)))
 
 
-(defstruct rxx
-  "An annotated regexp: the combination of regexp string and information about
-how it was constructed (`rxx-inst')."
-  regexp info)
-
 (defun get-rxx-inst (aregexp)
   "Extract rxx-inst from regexp struct AREGEXP,
 if there, otherwise return nil."
-  (when (rxx-p aregexp)
-    (rxx-info aregexp)))
-
-(defun rxx-regexp-string (aregexp)
-  "If AREGEXP is a plain string regexp, return that; if it is
-an `rxx' structure, return the regexp within that."
-  (if (rxx-p aregexp) (rxx-regexp aregexp) aregexp))
+  (when (rxx-inst-p aregexp)
+    aregexp))
 
 (defun rxx-opt-depth (aregexp)
   "Return `regexp-opt-depth' of the regexp string in AREGEXP."
@@ -615,9 +606,16 @@ the parsed object matched by this named group."
   "Parse and produce code from FORM, which is `(eval-regexp FORM)'."
   (declare (special rxx-num-grps))
   (rx-check form)
-  (let ((regexp (eval (second form))))
-    (incf rxx-num-grps (rxx-opt-depth regexp))
-    (concat "\\(?:" (rx-group-if (rxx-regexp-string regexp) rx-parent) "\\)")))
+  (concat "\\(?:" (rx-group-if (rxx-make-shy (eval (second form))) rx-parent) "\\)"))
+
+;; (defun rxx-process-eval-rxx (form &optional rx-parent)
+;;   "Parse and produce code from FORM, which is `(eval-rxx FORM)'."
+;;   (declare (special rxx-num-grps))
+;;   (rx-check form)
+;;   (let ((regexp (eval (second form))))
+;;     (incf rxx-num-grps (rxx-opt-depth regexp))
+;;     (concat "\\(?:" (rx-group-if (rxx-regexp-string regexp) rx-parent) "\\)")))
+
 
 ;; The following functions are created by the `elu-flet' call
 ;; in `rxx-instantiate', rather than being explicitly defined.
@@ -662,13 +660,9 @@ number to which it corresponds."
   (incf rxx-num-grps)
   (rx-submatch-orig form))
 
-(defun rxx-regexp-replacement (form)
-  "Update our count of non-shy subgroups to include any subgroups of the
-regexp inserted here."
-  (declare (special rxx-num-grps))
-  (prog1
-      (rx-regexp-orig form)
-    (incf rxx-num-grps (rxx-opt-depth (second form)))))
+(defun rxx-regexp (form)
+  "Make all subgroups of the regexp shy."
+  (rx-regexp-orig (list 'regexp (rxx-make-shy (second form)))))
 
 (defun rxx-process-sep-by (form)
   "Process the sep-by form, which looks like (sep-by separator ....)"
@@ -849,7 +843,7 @@ For detailed description, see `rxx'.
 "
   (elu-flet ((rx-form rxx-form)
 	     (rx-submatch rxx-submatch)
-	     (rx-regexp rxx-regexp-replacement)
+	     (rx-regexp rxx-regexp)
 	     (rx-kleene rxx-kleene))
 	     
     (let* ((max-lisp-eval-depth (max max-lisp-eval-depth rxx-max-lisp-eval-depth))
@@ -881,13 +875,12 @@ For detailed description, see `rxx'.
 	    ;; Add a mapping from the group's name to rxx-grp structure
 	    ;; to rxx-name2grp.
 	    (rxx-remove-unneeded-shy-grps
-	     (rxx-replace-posix (rx-to-string (rxx-def-form rxx-def) 'no-group))))
-	   (rxx-inst (make-rxx-inst
-		      :def rxx-def 
-		      :env rxx-env)))
+	     (rxx-replace-posix (rx-to-string (rxx-def-form rxx-def) 'no-group)))))
       (assert (= rxx-num-grps (regexp-opt-depth regexp)))
       (rxx-check-regexp-valid regexp)
-      (make-rxx :regexp regexp :info rxx-inst))))
+      (make-rxx-inst :def rxx-def 
+		     :env rxx-env
+		     :regexp regexp))))
 
 (defmacro rxxlet* (bindings &rest forms)
   (list 'let* (mapcar (lambda (binding) (list (first binding)
@@ -938,7 +931,7 @@ the parsed result in case of match, or nil in case of mismatch."
       ;; if partial match ok, longer partial match is generally better.
       ;; so, possibly, match each string.  (or only when rxx-longest-match-p is true?)
       
-      (if (not (string-match (rxx-regexp aregexp) s))
+      (if (not (string-match (rxx-inst-regexp aregexp) s))
 	  (unless error-ok (error "%s: No match" error-msg))
 	(let (no-parse)
 	  (unless partial-match-ok
@@ -963,7 +956,7 @@ the parsed result in case of match, or nil in case of mismatch."
 				(if (and bound (>= bound old-point) (< (- bound old-point) 100))
 				    (buffer-substring old-point bound)
 				  "buffer text") (rxx-inst-form rxx-inst))))
-	(if (not (re-search-forward (rxx-regexp aregexp) bound 'noerror))
+	(if (not (re-search-forward (rxx-inst-regexp aregexp) bound 'noerror))
 	    (unless noerror (error "%s" error-msg))
 	  (unless (or noerror partial-match-ok)
 	    (unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
@@ -985,7 +978,7 @@ the parsed result in case of match, or nil in case of mismatch."
 			       (if (and bound (>= bound old-point) (< (- bound old-point) 100))
 				   (buffer-substring old-point bound)
 				 "buffer text") aregexp)))
-	(if (not (re-search-backward (rxx-regexp aregexp) bound 'noerror))
+	(if (not (re-search-backward (rxx-inst-regexp aregexp) bound 'noerror))
 	    (unless noerror (error "%s" error-msg))
 	  (unless (or noerror partial-match-ok)
 	    (unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
@@ -1036,7 +1029,7 @@ the parsed result in case of match, or nil in case of mismatch."
     (let ((old-point (point))
 	  (rxx-inst (or (get-rxx-inst aregexp)
 			(error "Need annotated regexp returned by `rxx'; got `%s'" aregexp))))
-      (if (and (re-search-backward (rxx-regexp aregexp) bound 'noerror)
+      (if (and (re-search-backward (rxx-inst regexp aregexp) bound 'noerror)
 	       (or partial-match-ok
 		   (and (= (match-beginning 0) bound)
 			(= (match-end 0) old-point))))
