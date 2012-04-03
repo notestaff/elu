@@ -579,6 +579,8 @@ the parsed object matched by this named group."
 	  (grp-def
 	   (or
 	    (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
+	    (and (eq (car-safe grp-def-raw) 'eval-rxx)
+		 (make-rxx-def :form (eval (second grp-def-raw))))
 	    (make-rxx-def :form grp-def-raw)))
 	  (regexp-here-raw (rx-to-string (rxx-def-form grp-def) 'no-group))
 	  (regexp-here (format "\\(%s\\)"
@@ -604,18 +606,16 @@ the parsed object matched by this named group."
 
 (defun rxx-process-eval-regexp (form &optional rx-parent)
   "Parse and produce code from FORM, which is `(eval-regexp FORM)'."
-  (declare (special rxx-num-grps))
   (rx-check form)
   (concat "\\(?:" (rx-group-if (rxx-make-shy (eval (second form))) rx-parent) "\\)"))
 
-;; (defun rxx-process-eval-rxx (form &optional rx-parent)
-;;   "Parse and produce code from FORM, which is `(eval-rxx FORM)'."
-;;   (declare (special rxx-num-grps))
-;;   (rx-check form)
-;;   (let ((regexp (eval (second form))))
-;;     (incf rxx-num-grps (rxx-opt-depth regexp))
-;;     (concat "\\(?:" (rx-group-if (rxx-regexp-string regexp) rx-parent) "\\)")))
-
+(defun rxx-process-eval-rxx (form &optional rx-parent)
+  "Parse and produce code from FORM, which is `(eval-rxx FORM)'."
+  (declare (special rxx-num-grps))
+  (rxx-process-eval-regexp
+   (list 'regexp
+	 (rxx-inst-regexp
+	  (rxx-instantiate (make-rxx-def :form (eval (second form))))))))
 
 ;; The following functions are created by the `elu-flet' call
 ;; in `rxx-instantiate', rather than being explicitly defined.
@@ -856,6 +856,7 @@ For detailed description, see `rxx'.
 	   ;; extend the syntax understood by `rx-to-string' with named groups and backrefs
 	   (rx-constituents (append '((named-grp . (rxx-process-named-grp 1 nil))
 				      (eval-regexp . (rxx-process-eval-regexp 1 1))
+				      (eval-rxx . (rxx-process-eval-rxx 1 1))
 				      (shy-grp . seq)
 				      (& . seq)
 				      (blanks . "\\(?:[[:blank:]]+\\)")
