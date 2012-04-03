@@ -38,6 +38,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+;; Section: Customizations 
+;;
+;; Customizations for the elu library
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defgroup elu nil
+  "General-purpose Emacs Lisp utilities"
+  :tag 'elu
+  :group 'extensions)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 ;; Section: Functions defined here so they can be used in other definitions
 ;;
 ;; Logically, they belong in other sections of the code.
