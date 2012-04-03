@@ -580,18 +580,15 @@ the parsed object matched by this named group."
    (and (boundp 'rxx-replace-named-grps)
 	(cdr-safe (assoc (second form) rxx-replace-named-grps)))
    (let* ((grp-name (second form))
-	  (grp-def-raw (third form))
+	  (grp-def-raw
+	   (or (third form) (error "Missing named group definition: %s" form)))
 	  (grp-num (incf rxx-num-grps))
 	  (old-rxx-env rxx-env)
 	  (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
 	  (grp-def
-	   (cond
-	    ((and (symbolp grp-def-raw) (rxx-find-def grp-def-raw)))
-	    ((eq (car-safe grp-def-raw) 'regexp)
-	     (make-rxx-def :form (list 'regexp (second grp-def-raw))))
-	    ((eq (car-safe grp-def-raw) 'eval-regexp)
-	     (make-rxx-def :form (list 'regexp (eval (second grp-def-raw)))))
-	    ((make-rxx-def :form (or grp-def-raw (error "Missing named group definition: %s" form))))))
+	   (or
+	    (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
+	    (make-rxx-def :form grp-def-raw)))
 	  (regexp-here-raw (rx-to-string (rxx-def-form grp-def) 'no-group))
 	  (regexp-here (format "\\(%s\\)"
 			       (if (and (boundp 'rxx-disable-grps) (member grp-name rxx-disable-grps))
@@ -651,7 +648,7 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
 	      (get-rxx-inst (symbol-value (rxx-get-symbol-local-var (first form)))))
 	 (rxx-process-named-grp (list 'named-grp (second form)
 				      (first form))))
-	((and (symbolp form) (rxx-get-symbol-local-var form) (boundp 'rxx-env)
+	((and (symbolp form) (rxx-get-symbol-local-var form)
 	      (not (rxx-env-lookup (rxx-get-symbol-local-var form) rxx-env))
 	      (get-rxx-inst (symbol-value (rxx-get-symbol-local-var form))))
 	 (rxx-process-named-grp (list 'named-grp form form)))
@@ -766,8 +763,8 @@ return the list of parsed numbers, omitting the blanks.   See also
   (if (memq (first form) '(optional opt zero-or-one ? ??))
       (rx-kleene-orig form)
     (let* (return-value
-	   (wrap-grp-num (when (boundp 'rxx-num-grps) (incf rxx-num-grps)))
-	   (rxx-num-grps (elu-when-bound rxx-num-grps))
+	   (wrap-grp-num (incf rxx-num-grps))
+	   (rxx-num-grps rxx-num-grps)
 	   (parent-rxx-env (elu-when-bound rxx-env))
 	   (rxx-env (rxx-new-env parent-rxx-env))
 	   (sep-by-form (when (eq (car-safe (cdr-safe form)) :sep-by) (third form)))
