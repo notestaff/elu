@@ -530,23 +530,35 @@ Fields:
 	   (append (list 'def-rxx-regexp namespace) regexp-def))
 	 regexp-defs)))
 
-(defun* rxx-get-symbol-local-var (symbol &optional namespace)
-  "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
+(defun* rxx-find-symbol-namespace (symbol &optional namespace)
+  "Return the namespace for the given rxx-regexp name"
   (declare (special rxx-cur-namespace))
   (let ((rxx-cur-namespace (or namespace rxx-cur-namespace)))
     (dolist (test-namespace (cons rxx-cur-namespace (rxx-namespace-imports
 						     (symbol-value
 						      (rxx-namespace-global-var
 						       rxx-cur-namespace)))))
-      (let ((rxx-def-test-var (rxx-def-global-var test-namespace symbol)))
-	(when (boundp rxx-def-test-var)
-	  (let ((rxx-def-local (rxx-def-local-var test-namespace symbol)))
-	    (unless (local-variable-p rxx-def-local)
-	      (let* ((rxx-def (symbol-value rxx-def-test-var))
-		     (rxx-cur-namespace (rxx-def-namespace rxx-def))
-		     (rxx-inst (rxx-instantiate rxx-def)))
-		(set (make-local-variable rxx-def-local) rxx-inst)))
-	    (return-from rxx-get-symbol-local-var rxx-def-local)))))))
+      (when (boundp (rxx-def-global-var test-namespace symbol))
+	(return-from rxx-find-symbol-namespace test-namespace)))))
+
+(defun* rxx-get-symbol-local-var (symbol &optional namespace)
+  "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
+  (let ((symbol-namespace (rxx-find-symbol-namespace symbol namespace)))
+    (when symbol-namespace
+      (let ((rxx-def (symbol-value (rxx-def-global-var symbol-namespace symbol)))
+	    (rxx-def-local (rxx-def-local-var symbol-namespace symbol)))
+	(unless (local-variable-p rxx-def-local)
+	  (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
+		 (rxx-inst (rxx-instantiate rxx-def)))
+	    (set (make-local-variable rxx-def-local) rxx-inst)))
+	(return-from rxx-get-symbol-local-var rxx-def-local)))))
+
+(defun rxx-find-def (symbol)
+  "If SYMBOL names an rxx-regexp defined in the current namespace, return its definition,
+else return nil."
+  (let ((namespace (rxx-find-symbol-namespace symbol)))
+    (when namespace
+      (symbol-value (rxx-def-global-var namespace symbol)))))
 	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -573,13 +585,13 @@ the parsed object matched by this named group."
 	  (old-rxx-env rxx-env)
 	  (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
 	  (grp-def
-	   (or (and (symbolp grp-def-raw)
-		    (rxx-inst-def (get-rxx-inst (symbol-value (rxx-get-symbol-local-var grp-def-raw)))))
-	       (and (eq (car-safe grp-def-raw) 'regexp)  ; FIXME
-		    (rxx-inst-def (get-rxx-inst (second grp-def-raw))))
-	       (and (eq (car-safe grp-def-raw) 'eval-regexp)
-		    (make-rxx-def :form (list 'regexp (eval (second grp-def-raw)))))
-	       (make-rxx-def :form (or grp-def-raw (error "Missing named group definition: %s" form)))))
+	   (cond
+	    ((and (symbolp grp-def-raw) (rxx-find-def grp-def-raw)))
+	    ((eq (car-safe grp-def-raw) 'regexp)
+	     (make-rxx-def :form (list 'regexp (second grp-def-raw))))
+	    ((eq (car-safe grp-def-raw) 'eval-regexp)
+	     (make-rxx-def :form (list 'regexp (eval (second grp-def-raw)))))
+	    ((make-rxx-def :form (or grp-def-raw (error "Missing named group definition: %s" form))))))
 	  (regexp-here-raw (rx-to-string (rxx-def-form grp-def) 'no-group))
 	  (regexp-here (format "\\(%s\\)"
 			       (if (and (boundp 'rxx-disable-grps) (member grp-name rxx-disable-grps))
