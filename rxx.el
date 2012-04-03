@@ -385,7 +385,11 @@ passed in as AREGEXP or scoped in as RXX-AREGEXP. "
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun rxx-call-parser (rxx-inst match-str)
+  "Call the parser to parse the given match string."
   (let ((rxx-env (rxx-inst-env rxx-inst)))
+    ;; For each named subgroup, recursively parse what
+    ;; it matched and assign the resulting parsed object
+    ;; to a variable of the same name as the subgroup.
     (let* ((symbols (delq nil (mapcar 'car (rxx-inst-env rxx-inst))))
 	   (symbol-vals (mapcar
 			 (lambda (symbol)
@@ -534,11 +538,13 @@ Fields:
 
 (defun* rxx-get-symbol-local-var (symbol &optional namespace)
   "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
+  (declare (special rxx-no-cache))
   (let ((symbol-namespace (rxx-find-symbol-namespace symbol namespace)))
     (when symbol-namespace
       (let ((rxx-def (symbol-value (rxx-def-global-var symbol-namespace symbol)))
 	    (rxx-def-local (rxx-def-local-var symbol-namespace symbol)))
-	(unless (local-variable-p rxx-def-local)
+	(unless (and (local-variable-p rxx-def-local)
+		     (not (elu-when-bound rxx-no-cache))) 
 	  (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
 		 (rxx-inst (rxx-instantiate rxx-def)))
 	    (set (make-local-variable rxx-def-local) rxx-inst)))
