@@ -611,6 +611,10 @@ Also, lets you use a function symbol for the replacement function definition."
   "If the symbol X is bound then return the value of X, else return nil."
   `(when (boundp (quote ,x)) ,x))
 
+(defmacro elu-when-bound-func (x)
+  "If the symbol X is bound then return the value of X, else return nil."
+  (when (boundp x) x))
+
 (defun elu-assoc-val (key alist &optional error-message)
   "Looks up KEY in association list ALIST.  Unlike `assoc', returns the associated value rather than the associated pair.
 Also, converts key to a symbol if it is a string.
