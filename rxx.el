@@ -96,18 +96,33 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Section: general utils
-;;
-;; General-purpose utility routines used in the rxx module.
-;; Also, for portability, reimplementation of some routines from the
-;; cl (Common Lisp) module, and some routines available in GNU Emacs but not
-;; in XEmacs.
+;; Section: Customization
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defgroup rxx nil
+  "Options for the rxx regexp library"
+  :tag "rxx library options"
+  :group 'elu)
+
+(defcustom rxx-max-lisp-eval-depth 1200
+  "Value to which to increase `max-lisp-eval-depth' while parsing.
+Parsing can get highly nested so this can be needed especially if not byte-compiling."
+  :group 'rxx
+  :type 'integer)
+
+(defcustom rxx-max-specpdl-size 1200
+  "Value to which to increase `max-specpdl-size' while parsing.
+Parsing can get highly nested so this can be needed especially if not byte-compiling."
+  :group 'rxx
+  :type 'integer)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Utils for manipulating regexp strings
+;;
+;; These work with plain Emacs regexp strings, not just the annotated ones
+;; defined by this package.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -171,6 +186,8 @@ wrap a shy group around the returned REGEXP.  WARNING: this will
 kill any backrefs!  Adapted from `regexp-opt-depth'."
   ;; FIXME: check for backrefs, throw error if any present
   (save-match-data
+    (assert (not (string-match "\\\\[1-9]" regexp))
+	    nil "rxx-make-shy: does not work on regexps with backrefs")
     ;; Hack to signal an error if REGEXP does not have balanced parentheses.
     (string-match regexp "")
     ;; Count the number of open parentheses in REGEXP.
@@ -194,12 +211,31 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Section: rxx-info
+;; Section: rxx-regexp representation
 ;;
 ;; Extra information we store with each constructed regexp.  This information
 ;; lets us reuse the regexp as a building block of larger regexps.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defstruct
+  rxx-def
+  "The definition of an rxx regexp.
+
+Fields:
+
+   NAMESPACE - the namespace to which this rxx-def belongs.  a symbol.
+   NAME - name of the aregexp.  a symbol.
+   DESCR - the description of this regexp.  typically says what it matches as
+     well as what it gets parsed into by the PARSER below.
+   FORM - the form defining this regexp, in an extension of `rx' syntax
+   PARSER - the parser for this regexp, that turns its matches into programmatic
+     objects.  Either a lisp form, or a one-argument function.  Can refer to the
+     result of parsing named subgroups by the subgroup names.
+"
+  namespace name descr form parser)
+
+
 
 (defstruct rxx-info
   "Information about a regexp.  Describes both a general template
@@ -463,20 +499,6 @@ Fields:
 			 :exports (quote ,(elu-make-seq exports)))
      ,descr))
 
-(defstruct
-  rxx-def
-  "The definition of an rxx regexp.
-
-Fields:
-
-   NAMESPACE - the namespace to which this rxx-def belongs
-   NAME - name of the aregexp
-   DESCR - the description of this rxx
-   FORM - the form defining this rxx
-   PARSER - the parser for this rxx
-"
-  namespace name descr form parser)
-
 
 (defun rxx-def-global-var (namespace name)
   "Construct the name of the global var storing the given rxx-def"
@@ -493,6 +515,13 @@ Fields:
 		   :form (quote ,form) :parser (quote ,parser))
      ,descr))
 
+(defmacro def-rxx-regexps (namespace &rest regexp-defs)
+  "Define several regexps in the same NAMESPACE."
+  (cons 'progn
+	(mapcar
+	 (lambda (regexp-def)
+	   (append (list 'def-rxx-regexp namespace) regexp-def))
+	 regexp-defs)))
 
 (defun* rxx-get-symbol-local-var (symbol &optional namespace)
   "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
@@ -507,8 +536,8 @@ Fields:
 	  (let ((rxx-def-local (rxx-def-local-var test-namespace symbol)))
 	    (unless (local-variable-p rxx-def-local)
 	      (elu-with 'rxx-def (symbol-value rxx-def-test-var) (namespace form parser descr)
-	      (let* ((rxx-cur-namespace namespace)
-		     (the-rxx (rxx-to-string form parser descr)))
+		(let* ((rxx-cur-namespace namespace)
+		       (the-rxx (rxx-to-string form parser descr)))
 		  (set (make-local-variable rxx-def-local) the-rxx))))
 	    (return-from rxx-get-symbol-local-var rxx-def-local)))))))
 	
@@ -530,7 +559,7 @@ the parsed object matched by this named group."
   (rx-check form)
   (or
    (and (boundp 'rxx-replace-named-grps)
-	   (cdr-safe (assoc (second form) rxx-replace-named-grps)))
+	(cdr-safe (assoc (second form) rxx-replace-named-grps)))
    (let* ((grp-name (second form))
 	  (grp-def-raw (third form))
 	  (grp-num (incf rxx-num-grps))
@@ -589,7 +618,7 @@ the parsed object matched by this named group."
 
 (defun rxx-form (form &optional rx-parent)
   "Handle named subexpressions.  Any symbol whose variable value
-is an aregexp (e.g.  one defined by `defrxx') can be used as a
+is an aregexp (e.g.  one defined by `def-rxx-regexp') can be used as a
 form.  More specifically: if R is a symbol whose variable value
 is an aregexp, the form (R name) creates a named group (see
 `rxx-process-named-grp') with the name R matching that aregexp.
@@ -808,7 +837,8 @@ For detailed description, see `rxx'.
 	     (rx-regexp rxx-regexp-replacement)
 	     (rx-kleene rxx-kleene))
 	     
-    (let* ((max-lisp-eval-depth (max max-lisp-eval-depth 1200))
+    (let* ((max-lisp-eval-depth (max max-lisp-eval-depth rxx-max-lisp-eval-depth))
+	   (max-specpdl-size (max max-specpdl-size rxx-max-specpdl-size))
 	   (rxx-env (rxx-new-env))
 	   (rxx-num-grps 0)
 	   rxx-or-branch
@@ -833,7 +863,7 @@ For detailed description, see `rxx'.
 	   (regexp
 	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
 	    ;; in the form, it calls back to rxx-process-named-grp, which will
-	    ;; add a mapping from the group's name to rxx-grp structure
+	    ;; Add a mapping from the group's name to rxx-grp structure
 	    ;; to rxx-name2grp.
 	    (rxx-remove-unneeded-shy-grps
 	     (rxx-replace-posix (rx-to-string form 'no-group))))
@@ -853,13 +883,13 @@ For detailed description, see `rxx'.
 
 (defun rxx-add-font-lock-keywords ()
   (when (featurep 'font-lock)
-    (put 'defrxxconst 'doc-string-elt 3)
+    (put 'def-rxx-namespace 'doc-string-elt 3)
     (put 'defrxx 'doc-string-elt 4)
     (put 'defrxxrecurse 'doc-string-elt 5)
     (when (fboundp 'font-lock-add-keywords)
       (font-lock-add-keywords
        nil
-       `((,(rx (seq bow (group (or "defrxx" "defrxxconst" "defrxxcustom" "defrxxstruct"))
+       `((,(rx (seq bow (group (or "def-rxx-namespace" "def-rxx-regexp" "def-rxx-regexps"))
 		    (1+ blank) (group (1+ (not space))))) .
 		    ((1 font-lock-keyword-face) (2 font-lock-variable-name-face)))
 	 (,(rx (seq bow (group "defrxxrecurse") (1+ blank) (1+ digit) (1+ blank) (group (1+ (not space))))) .
@@ -1017,7 +1047,7 @@ Fields:
 "
   loc text)
 
-(defun rxx-kill-local-vars ()
+(defun rxx-reset ()
   "Kill local rxx vars"
   (interactive)
   (let (vars-killed)
