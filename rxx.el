@@ -556,6 +556,18 @@ else return nil."
   (let ((namespace (rxx-find-symbol-namespace symbol)))
     (when namespace
       (symbol-value (rxx-def-global-var namespace symbol)))))
+
+;; operations in terms of which everything else can be written:
+
+;; given a symbol:
+;;   - return the full namespace:symbol, or nil if does not exist
+;;        --> if specified, use that; if not, look if to see if this symbol was defined
+;;         in rxx-cur-namespace or things it imports.   rxx-cur-namespace can start out
+;;        as the global constant global-rxx-namespace.
+;;   - store rxx-def for a given symbol in namespace.
+;;   - store/load an instantiation of the symbol in a local namespace.
+;;    local can be a buffer-local variable but also a local binding.
+;     for the latter to work, it'd be best to have one var keep the definitions.
 	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
