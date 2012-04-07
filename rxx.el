@@ -242,34 +242,20 @@ Fields:
 
 
 (defstruct rxx-inst
-  "Information about a regexp.  Describes both a general template
-for creating instances of this regexp, and a particular
-instantiation of that template.  When `rxx-instantiate' analyzes an
+  "Information about a particular instantiation of an `rxx-def', either at the
+top level or as part of a larger regexp.  When `rxx-instantiate' analyzes an
 sexp defining a regexp, it creates one `rxx-inst' for the overall
 regexp and one for each named subgroup within the regexp.
-
-The `rxx-inst' for the overall regexp is attached to the regexp
-string as a text property, creating an _annotated_ regexp, or
-aregexp for short.  This extended information enables us to parse
+This extended information enables us to parse
 matches of this regexp into programmatic objects, and to use this
 regexp as a building block in larger regexps.
 
 Fields:
-
-   Fields describing the reusable regexp template:
-
-     FORM - the sexp defining this regexp, in the syntax accepted by `rxx-instantiate'.
-     PARSER - form or function that parses matches of this regexp into programmatic objects.   It can refer to parsed
-        values of named direct subgroups simply by subgroup name (they're dynamically scoped in whenever the parser
-        is invoked).  If a function, it takes one argument: the string representing the full match to this regexp
-        (as returned by (match-string 0)).
-     DESCR - a human-readable description of the entity matched by this regexp.   Used in error messages.
-
-   Fields describing the particular instantiation of the template:
-
+     DEF - the definition of the rxx-regexp that we are instantiating
      ENV - environment for resolving references to named subgroups of this regexp.  Maps subgroup name to
        `rxx-inst' for the subgroup.
-     NUM - the numbered group corresponding to to matches of this regexp (as would be passed to `match-string').
+     NUM - the numbered group corresponding to matches of this rxx-inst within the larger regexp. (as would be passed to `match-string').
+     REGEXP - the regexp string, as passed to `string-match' etc.
 "
   def env num regexp)
 
