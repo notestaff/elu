@@ -485,22 +485,29 @@ passed in via AREGEXP or scoped in via RXX-AREGEXP."
 Fields:
 
    NAME - the name of this namespace
-   EXPORTS - the names of the rxx-regexps in this namespace.
    IMPORTS - the names of any imported namespaces
 "
-  name exports imports)
+  name imports)
 
 (defun rxx-namespace-global-var (name)
   "Construct the name of the global var storing the given namespace"
   (intern (concat (symbol-name name) "-rxx-namespace")))
 
-(defmacro* def-rxx-namespace (name descr &key imports exports)
-  "Define an rxx namespace."
-  `(defconst ,(rxx-namespace-global-var name)
-     (make-rxx-namespace :name (quote ,name) :imports (quote ,(elu-make-seq imports))
-			 :exports (quote ,(elu-make-seq exports)))
-     ,descr))
+(defmacro* def-rxx-namespace (name &optional (descr (concat "Namespace" (symbol-name name))) &key imports)
+  "Define an rxx namespace.  Each rxx-regexp define using `def-rxx-regexp' belongs to a particular
+namespace -- typically, the name of the elisp module in which the regexp is defined.
 
+Params:
+
+   NAME - the name of the namespace, a symbol.
+   DESCR - a string describing the namespace
+   IMPORTS - the namespaces imported into this namespace.   Importing a namespace imports all symbols from that
+      namespace into the namespace NAME.  Typically, this corresponds to the names of modules that your
+      module requires (but only those modules that define rxx-regexps that your module uses).
+"
+  `(defconst ,(rxx-namespace-global-var name)
+     (make-rxx-namespace :name (quote ,name) :imports (quote ,(elu-make-seq imports)))
+     ,descr))
 
 (defun rxx-def-global-var (namespace name)
   "Construct the name of the global var storing the given rxx-def"
