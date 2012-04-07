@@ -607,13 +607,13 @@ Also, lets you use a function symbol for the replacement function definition."
 	      bindings))
        ,@body)))
 
-(defmacro elu-when-bound (x)
-  "If the symbol X is bound then return the value of X, else return nil."
-  `(when (boundp (quote ,x)) ,x))
+(defmacro elu-when-bound (x &optional dflt)
+  "If the symbol X is bound then return the value of X, else return DFLT."
+  `(if (boundp (quote ,x)) ,x ,dflt))
 
-(defmacro elu-when-bound-func (x)
-  "If the symbol X is bound then return the value of X, else return nil."
-  (when (boundp x) x))
+(defmacro elu-when-bound-func (x &optional dflt)
+  "If the symbol X is bound then return the value of X, else return DFLT."
+  (if (boundp x) x dflt))
 
 (defun elu-assoc-val (key alist &optional error-message)
   "Looks up KEY in association list ALIST.  Unlike `assoc', returns the associated value rather than the associated pair.
