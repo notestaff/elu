@@ -518,7 +518,27 @@ Params:
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def-local")))
 
 (defmacro* def-rxx-regexp (namespace name descr form &optional (parser 'identity))
-  "Defeine an rxx regexp."
+  "Define an rxx regexp.
+
+  Params:
+
+    NAMESPACE - the namespace for this regexp.
+    NAME - the name for this regexp within NAMESPACE
+    DESCR - a string documenting what this regexp matches, and what the matches are
+      parsed into by PARSER
+    FORM - the sexp defining the regexp (described below).
+    PARSER - an elisp form or function that parses matches to this regexp into
+programmatic objects.  If a function, it should take one argument -- the string that matched
+the whole regexp.   The parser can refer to the results of parsing any named subgroup
+by the name of the subgroup.  If a subgroup G is inside a repeat expression, the parser can
+refer to the list of parsed matches as G-LIST.
+
+ Syntax of FORM:
+
+ Everything supported by `rx' is allowed.  In addition, the following extensions are supported:
+
+   (named-grp NAME FORM)
+"
   `(defconst ,(rxx-def-global-var namespace name)
      (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
 		   :form (quote ,form) :parser (quote ,parser))
@@ -551,7 +571,13 @@ Params:
       (let ((rxx-def (symbol-value (rxx-def-global-var symbol-namespace symbol)))
 	    (rxx-def-local (rxx-def-local-var symbol-namespace symbol)))
 	(unless (and (local-variable-p rxx-def-local)
-		     (not (elu-when-bound rxx-no-cache))) 
+		     (not (elu-when-bound rxx-no-cache)))
+
+	  ;; FIXME need local instantiations _for different params_ such as recursion depth, maybe greediness, etc.
+	  ;; so, keep an alist.
+	  ;; maybe, a single one for all: rxx-insts.
+	  ;; then people can bind it to nil if they want to.
+	  
 	  (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
 		 (rxx-inst (rxx-instantiate rxx-def)))
 	    (set (make-local-variable rxx-def-local) rxx-inst)))
@@ -865,7 +891,14 @@ extensions.  The extensions, taken together, allow specifying simple grammars
 in a modular fashion using regular expressions.
 
 For detailed description, see `rxx'.
-"
+
+*** FIXME handle recursion depth here: keep track of definitions already instantiated,
+(can base this on eq.)
+if this one already was then do what we did before for recursion.
+then don't need the special recurse form."
+(declare (special rxx-defs-instantiated) (special rxx-recurs-depth))
+(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s"
+	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
   (elu-flet ((rx-form rxx-form)
 	     (rx-submatch rxx-submatch)
 	     (rx-regexp rxx-regexp)
