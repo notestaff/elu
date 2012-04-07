@@ -302,7 +302,8 @@ having to find and rebind all the symbols."
 environment RXX-ENV, or return nil if not found.  GRP-NAME is
 either a symbol, or a list of symbols indicating a path through
 nested named groups.  Since multiple groups may be bound to the
-same name in an environment, this returns a list."
+same name in an environment (because mutually exclusive variants
+may contain named subgroups of the same name), this returns a list."
   (when (symbolp grp-name) (setq grp-name (list grp-name)))
   (if (eq (first grp-name) (intern ".."))
       (rxx-env-lookup (cdr grp-name) (rxx-parent-env rxx-env))
