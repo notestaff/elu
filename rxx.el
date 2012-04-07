@@ -990,7 +990,7 @@ the parsed result in case of match, or nil in case of mismatch."
       ;; if partial match ok, longer partial match is generally better.
       ;; so, possibly, match each string.  (or only when rxx-longest-match-p is true?)
       
-      (if (not (string-match (rxx-inst-regexp aregexp) s))
+      (if (not (funcall (if (elu-when-bound rxx-posix) 'posix-string-match 'string-match) (rxx-inst-regexp aregexp) s))
 	  (unless error-ok (error "%s: No match" error-msg))
 	(let (no-parse)
 	  (unless partial-match-ok
