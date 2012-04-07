@@ -1116,6 +1116,7 @@ Fields:
 (defun rxx-reset ()
   "Kill local rxx vars"
   (interactive)
+  (makunbound 'rxx-cur-namespace)
   (let (vars-killed)
     (dolist (var (delq nil (mapcar 'car-safe (buffer-local-variables))) vars-killed)
       (when (and (symbolp var)
