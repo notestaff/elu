@@ -5,7 +5,6 @@
 (def-rxx-namespace org
   "Org mode expressions"
   :imports elu-valu
-  :exports (priority-char priority-cookie)
   )
 
 ;; should this be def-rxx-regexp instead?
@@ -53,6 +52,11 @@
 ; and, 
 
 (def-rxx-regexps org
+
+  (stars "The initial stars of an Org headline.  Parses as the level."
+	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
+		    (1+ (named-grp star "*")))) (length star-list))
+  
   (priority-char "A priority character.  Parsed as the priority char."
 		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority)))
 
@@ -116,6 +120,30 @@
 
 ;; 
 
+(defconst rxx-org-test-defs
+  '(
+    (stars ((org-odd-levels-only t)) "***" 2)
+    (stars ((org-odd-levels-only nil)) "***" 3)
+    (stars ((org-odd-levels-only t)) "****" (rxx-parse-error "Error parsing `****' as `The initial stars of an Org headline.  Parses as the level.': match ends at 3"))
+    ))
 
-(rxx-parse-string org matcher "privet/lunatikam")
-	
+(defun rxx-org-tests ()
+  (interactive)
+  (let ((num-ok 0))
+    (dolist (test-def rxx-org-test-defs)
+      (destructuring-bind (name var-settings str expected-result) test-def
+	(let ((cur-result
+	       (progv (mapcar 'car var-settings) (mapcar 'cadr var-settings)
+		 (rxx-reset)
+		 (condition-case err
+		     (rxx-parse-string-func 'org name str)
+		   (rxx-parse-error err)))))
+	  (if (equal cur-result expected-result)
+	      (incf num-ok)
+	    (error "rxx org test failed: test=%s got=%s"
+		   test-def cur-result)))))
+    (message "%s tests passed" num-ok)))
+
+(rxx-org-tests)
+
+;(rxx-parse-string org matcher "privet/lunatikam")
