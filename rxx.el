@@ -276,6 +276,19 @@ if there, otherwise return nil."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+;; Section: Error handling
+;;
+;; Error symbols used in this package
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(put 'rxx-error 'error-conditions '(error elu-error rxx-error))
+(put 'rxx-error 'error-message "Error in module `rxx'")
+(put 'rxx-parse-error 'error-conditions '(error elu-error rxx-error rxx-parse-error))
+(put 'rxx-parse-error 'error-message "Error parsing an rxx-regexp")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 ;; Section: Environments
 ;;
 ;; Map from named group name to information about that named group.
@@ -968,7 +981,7 @@ the parsed result in case of match, or nil in case of mismatch."
   (unless s (error "rxx-parse: nil string"))
   (save-match-data
     (let* ((rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
-	   (error-msg (format "Error parsing \`%s\' as %s" s
+	   (error-msg (format "Error parsing \`%s\' as \`%s\'" s
 			      (or (rxx-inst-descr rxx-inst) (rxx-inst-form rxx-inst)))))
       
       ;; so, what you need here is just:
@@ -978,13 +991,13 @@ the parsed result in case of match, or nil in case of mismatch."
       ;; so, possibly, match each string.  (or only when rxx-longest-match-p is true?)
       
       (if (not (funcall (if (elu-when-bound rxx-posix) 'posix-string-match 'string-match) (rxx-inst-regexp aregexp) s))
-	  (unless error-ok (error "%s: No match" error-msg))
+	  (unless error-ok (signal 'rxx-parse-error (list (format "%s: No match" error-msg))))
 	(let (no-parse)
 	  (unless partial-match-ok
 	    (unless (= (match-beginning 0) 0)
-	      (if error-ok (setq no-parse t) (error "%s: match starts at %d" error-msg (match-beginning 0))))
+	      (if error-ok (setq no-parse t) (signal 'rxx-parse-error (list (format "%s: match starts at %d" error-msg (match-beginning 0))))))
 	    (unless (= (match-end 0) (length s))
-	      (if error-ok (setq no-parse t) (error "%s: match ends at %d" error-msg (match-end 0)))))
+	      (if error-ok (setq no-parse t) (signal 'rxx-parse-error (list (format "%s: match ends at %d" error-msg (match-end 0)))))))
 	  (unless no-parse
 	    (let* ((rxx-env (rxx-inst-env rxx-inst))
 		   (rxx-object s))
