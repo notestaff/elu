@@ -26,7 +26,7 @@
 ;;
 ;;; Commentary:
 ;;
-;; General-purpose emacs utilities.  Also includes some functions present
+;; General-purpose Emacs utilities.  Also includes some functions present
 ;; in GNU Emacs but not XEmacs; putting them into the elu namespace
 ;; helps write portable code.
 ;; Also, includes some functions taken from the CL package, but
@@ -42,6 +42,8 @@
 ;;
 ;; Customizations for the elu library
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;; Code:
 
 (defgroup elu nil
   "General-purpose Emacs Lisp utilities"
@@ -74,8 +76,7 @@ Used for iterating over arguments that can be a list or a singleton value."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun elu-remove-if (predicate seq)
-  "Return a new sequence containing elements of SEQ that do not satisfy
-PREDICATE."
+  "Return a new sequence containing elements of SEQ that do not satisfy PREDICATE."
   (let (result)
     (dolist (e seq)
       (unless (funcall predicate e)
