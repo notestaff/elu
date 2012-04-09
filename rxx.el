@@ -884,8 +884,8 @@ For detailed description, see `rxx'.
 if this one already was then do what we did before for recursion.
 then don't need the special recurse form."
 (declare (special rxx-defs-instantiated) (special rxx-recurs-depth))
-(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s"
-	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
+;(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s"
+;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
   (elu-flet ((rx-form rxx-form)
 	     (rx-submatch rxx-submatch)
 	     (rx-regexp rxx-regexp)
