@@ -53,6 +53,11 @@
 
 (def-rxx-regexps org
 
+  (headline "A headline"
+	    (seq bol (sep-by blanks stars todo? priority-cookie? headline-text? stats-cookie? tags?) eol)
+	    (list stars priority-cookie todo (elu-trim-whitespace headline-text)
+		  stats-cookie tags))
+
   (stars "The initial stars of an Org headline.  Parses as the level."
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
@@ -71,12 +76,14 @@
 
   (headline-text "Headline text" (minimal-match (1+ nonl)))
 
-  (stats-cookie "statistics cookie" (seq "[" alnum "/" alnum "]"))
+  (int "an integer.  parses as its value." (1+ digit) string-to-number)
+  (int-ratio "a ratio.  parses as a floating-point value of the ratio." (seq (int numer) "/" (int denom)) (/ (float numer) (float denom)))
 
-  (headline "A headline"
-	    (seq bol (sep-by blanks stars todo? priority-cookie? headline-text? stats-cookie? tags?) eol)
-	    (list stars priority-cookie todo (elu-trim-whitespace headline-text)
-		  stats-cookie tags))
+  (percentage "a percentage.  parses as a floating-point value of the percentage."
+	      (seq int "%") (/ (float int) 100.0)) 
+  
+  (stats-cookie "statistics cookie" (seq "[" (or (int-ratio val) (percentage val)) "]") val)
+
   
   (matcher "A tags-and-properties matcher.  Parses as the corresponding form."
   (seq tags-and-props-matcher? (opt "/" todo-matcher))
@@ -146,6 +153,14 @@
     (headline ((org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  nil ("new" "work")))
+    (int-ratio nil "3/4" .75)
+    (percentage nil "33%" .33)
+    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+	      "*** TODO [#A] Vsem privet [2/4]   :new:work:"
+	      (2 ?A "TODO" "Vsem privet"  .5 ("new" "work")))
+    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+	      "*** TODO [#A] Vsem privet [75%]   :new:work:"
+	      (2 ?A "TODO" "Vsem privet"  .75 ("new" "work")))
     ))
 
 (defun rxx-org-tests ()
