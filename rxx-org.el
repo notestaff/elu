@@ -57,15 +57,27 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
-  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) org-todo-keywords-1))) eow) the-todo) 
+  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) org-todo-keywords-1))) eow) the-todo)
   
   (priority-char "A priority character.  Parsed as the priority char."
-		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority)))
+		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority))
+		 string-to-char)
 
   (priority-cookie "A priority cookie.  Parsed as the priority char."
 		   (seq "[#" priority-char "]") priority-char)
 
+  (tag "Tag name, parses as tag name" (1+ (any alnum "_@#%")))
+  (tags "List of tags.  Parses as list of tags."  (& blanks? (opt ":" (1+ (& tag ":")) eol)) tag-list)
 
+  (headline-text "Headline text" (minimal-match (1+ nonl)))
+
+  (stats-cookie "statistics cookie" (seq "[" alnum "/" alnum "]"))
+
+  (headline "A headline"
+	    (seq bol (sep-by blanks stars todo? priority-cookie? headline-text? stats-cookie? tags?) eol)
+	    (list stars priority-cookie todo (elu-trim-whitespace headline-text)
+		  stats-cookie tags))
+  
   (matcher "A tags-and-properties matcher.  Parses as the corresponding form."
   (seq tags-and-props-matcher? (opt "/" todo-matcher))
   `(and ,tags-and-props-matcher ,todo-matcher))
@@ -127,15 +139,24 @@
     (stars ((org-odd-levels-only t)) "***" 2)
     (stars ((org-odd-levels-only nil)) "***" 3)
     (stars ((org-odd-levels-only t)) "****" (rxx-parse-error "Error parsing `****' as `The initial stars of an Org headline.  Parses as the level.': match ends at 3"))
-    (todo ((org-todo-keywords-1 ("TODO" "DONE"))) "TODO" "TODO")
+    (todo ((org-todo-keywords-1 ("TODO" "DONE"))) "TODO" str)
+    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+	      "* Vsem privet"
+	      (1 nil nil "Vsem privet" nil nil))
+    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+	      "*** TODO [#A] Vsem privet   :new:work:"
+	      (2 ?A "TODO" "Vsem privet"  nil ("new" "work")))
     ))
 
 (defun rxx-org-tests ()
   (interactive)
+  ;; TODO add code to run this on actual org files.  maybe compare results with the new parser.
+  (rxx-reset)
   (let ((num-ok 0))
     (dolist (test-def rxx-org-test-defs)
       (destructuring-bind (name var-settings str expected-result) test-def
-	(let ((cur-result
+	(let ((expected-result (if (eq expected-result 'str) str expected-result))
+	      (cur-result
 	       (progv (mapcar 'car var-settings) (mapcar 'cadr var-settings)
 		 (rxx-reset)
 		 (condition-case err
@@ -143,6 +164,7 @@
 		   (rxx-parse-error err)))))
 	  (if (equal cur-result expected-result)
 	      (incf num-ok)
+	    (message "\n----------\n\nexp=%s\ncur=%s\n---------\n" expected-result cur-result)
 	    (error "rxx org test failed: test=%s got=%s"
 		   test-def cur-result)))))
     (message "%s tests passed" num-ok)))
