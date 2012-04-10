@@ -36,6 +36,8 @@
 ;;
 ;; See also: `elu-test.el'.
 
+(require 'rx)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Customizations 
@@ -396,7 +398,8 @@ remaining fields taking values from STRUCT.   CLAUSES has the form :field1 val1 
 (defun elu-trim-whitespace (s)
   "Trim trailing and leading whitespace from string"
   (save-match-data
-    (replace-regexp-in-string "\\(\\`\\s-*\\\\)|\\(*\\'\\)"
+    (replace-regexp-in-string (rx (group (or (seq bos (1+ space))
+					     (seq (1+ space) eos))))
      "" (if (symbolp s) (symbol-name s) s))))
 
 (defun elu-not-blank (s)
