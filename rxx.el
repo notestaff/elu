@@ -658,6 +658,8 @@ the parsed object matched by this named group."
 (defun rxx-process-eval-regexp (form &optional rx-parent)
   "Parse and produce code from FORM, which is `(eval-regexp FORM)'."
   (rx-check form)
+
+  ;; FIXME do not add shy grp if not needed
   (concat "\\(?:" (rx-group-if (rxx-make-shy (eval (second form))) rx-parent) "\\)"))
 
 (defun rxx-process-eval-rxx (form &optional rx-parent)
