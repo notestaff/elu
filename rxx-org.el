@@ -56,6 +56,8 @@
   (stars "The initial stars of an Org headline.  Parses as the level."
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
+
+  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) org-todo-keywords-1))) eow) the-todo) 
   
   (priority-char "A priority character.  Parsed as the priority char."
 		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority)))
@@ -125,6 +127,7 @@
     (stars ((org-odd-levels-only t)) "***" 2)
     (stars ((org-odd-levels-only nil)) "***" 3)
     (stars ((org-odd-levels-only t)) "****" (rxx-parse-error "Error parsing `****' as `The initial stars of an Org headline.  Parses as the level.': match ends at 3"))
+    (todo ((org-todo-keywords-1 ("TODO" "DONE"))) "TODO" "TODO")
     ))
 
 (defun rxx-org-tests ()
