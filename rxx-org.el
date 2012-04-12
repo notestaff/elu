@@ -62,6 +62,9 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
+  (one-of "one of a list of words" (seq bow (named-grp str-list (eval-rxx (cons (quote or) str-list))) eow)
+	  identity (str-list))
+
   ;  ((one-of str-list) "one of a list of strings"
   ;    (seq bow (named-grp the-todo (eval-rxx (cons (quote or) str-list))) eow)
   ; (todo "the todo keyword" (named-grp todo-kw (one-of org-todo-keywords-1)))

@@ -233,11 +233,12 @@ Fields:
    PARSER - the parser for this regexp, that turns its matches into programmatic
      objects.  Either a lisp form, or a one-argument function.  Can refer to the
      result of parsing named subgroups by the subgroup names.
+   ARGS - argument list (Common Lisp-style) for instantiating this definition
 "
   ;; other things to store here:
   ;; case-sens, posix-search, 
   
-  namespace name descr form (parser 'identity))
+  namespace name descr form (parser 'identity) args)
 
 
 
@@ -513,7 +514,7 @@ Params:
   "Construct the name of the global var storing the given rxx-def"
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
 
-(defmacro* def-rxx-regexp (namespace name descr form &optional (parser 'identity))
+(defmacro* def-rxx-regexp (namespace name descr form &optional (parser 'identity) args)
   "Define an rxx regexp.
 
   Params:
@@ -537,7 +538,7 @@ refer to the list of parsed matches as G-LIST.
 "
   `(defconst ,(rxx-def-global-var namespace name)
      (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
-		   :form (quote ,form) :parser (quote ,parser))
+		   :form (quote ,form) :parser (quote ,parser) :args (quote ,args))
      ,descr))
 
 (defmacro def-rxx-regexps (namespace &rest regexp-defs)
@@ -607,6 +608,7 @@ the parsed object matched by this named group."
    (let* ((grp-name (second form))
 	  (grp-def-raw
 	   (or (third form) (error "Missing named group definition: %s" form)))
+	  (grp-actual-args (cdddr form))
 	  (grp-num (incf rxx-num-grps))
 	  (old-rxx-env rxx-env)
 	  (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
@@ -871,7 +873,7 @@ return the list of parsed numbers, omitting the blanks.   See also
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun rxx-instantiate (rxx-def)
+(defun rxx-instantiate-no-args (rxx-def)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
 extensions.  The extensions, taken together, allow specifying simple grammars
 in a modular fashion using regular expressions.
@@ -894,7 +896,7 @@ then don't need the special recurse form."
 	   (max-specpdl-size (max max-specpdl-size rxx-max-specpdl-size))
 	   (rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env))
-	   (rxx-num-grps 0)
+	   (rxx-num-grps (elu-when-bound rxx-num-grps 0))
 	   rxx-or-branch
 	   rxx-or-child
 	   (rxx-or-num 0)
@@ -928,6 +930,12 @@ then don't need the special recurse form."
       (make-rxx-inst :def rxx-def 
 		     :env rxx-env
 		     :regexp regexp))))
+
+(defun rxx-instantiate (rxx-def &optional actual-args)
+  "Instantiate with args"
+  (eval
+   `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
+	(rxx-instantiate-no-args ,rxx-def))))
 
 (defmacro rxxlet* (bindings &rest forms)
   (list 'let* (mapcar (lambda (binding) (list (first binding)
