@@ -513,10 +513,6 @@ Params:
   "Construct the name of the global var storing the given rxx-def"
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
 
-(defun rxx-def-local-var (namespace name)
-  "Construct the name of the buffer-local var storing the given rxx-def"
-  (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def-local")))
-
 (defmacro* def-rxx-regexp (namespace name descr form &optional (parser 'identity))
   "Define an rxx regexp.
 
@@ -555,38 +551,25 @@ refer to the list of parsed matches as G-LIST.
 (defun* rxx-find-symbol-namespace (symbol &optional namespace)
   "Return the namespace for the given rxx-regexp name"
   (declare (special rxx-cur-namespace))
-  (let ((rxx-cur-namespace (or namespace rxx-cur-namespace)))
-    (dolist (test-namespace (cons rxx-cur-namespace (rxx-namespace-imports
-						     (symbol-value
-						      (rxx-namespace-global-var
-						       rxx-cur-namespace)))))
-      (when (boundp (rxx-def-global-var test-namespace symbol))
-	(return-from rxx-find-symbol-namespace test-namespace)))))
+  (let ((rxx-cur-namespace (or namespace (elu-when-bound rxx-cur-namespace))))
+    (when rxx-cur-namespace
+      (dolist (test-namespace (cons rxx-cur-namespace (rxx-namespace-imports
+						       (symbol-value
+							(rxx-namespace-global-var
+							 rxx-cur-namespace)))))
+	(when (boundp (rxx-def-global-var test-namespace symbol))
+	  (return-from rxx-find-symbol-namespace test-namespace))))))
 
-(defun* rxx-get-symbol-local-var (symbol &optional namespace)
-  "Get the correct buffer-local var containing the rxx-def for the symbol, if there is one"
-  (declare (special rxx-no-cache))
-  (let ((symbol-namespace (rxx-find-symbol-namespace symbol namespace)))
-    (when symbol-namespace
-      (let ((rxx-def (symbol-value (rxx-def-global-var symbol-namespace symbol)))
-	    (rxx-def-local (rxx-def-local-var symbol-namespace symbol)))
-	(unless (and (local-variable-p rxx-def-local)
-		     (not (elu-when-bound rxx-no-cache)))
 
-	  ;; FIXME need local instantiations _for different params_ such as recursion depth, maybe greediness, etc.
-	  ;; so, keep an alist.
-	  ;; maybe, a single one for all: rxx-insts.
-	  ;; then people can bind it to nil if they want to.
+;; 	  ;; FIXME need local instantiations _for different params_ such as recursion depth, maybe greediness, etc.
+;; 	  ;; so, keep an alist.
+;; 	  ;; maybe, a single one for all: rxx-insts.
+;; 	  ;; then people can bind it to nil if they want to.
 	  
-	  (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
-		 (rxx-inst (rxx-instantiate rxx-def)))
-	    (set (make-local-variable rxx-def-local) rxx-inst)))
-	(return-from rxx-get-symbol-local-var rxx-def-local)))))
-
-(defun rxx-find-def (symbol)
+(defun rxx-find-def (symbol &optional namespace)
   "If SYMBOL names an rxx-regexp defined in the current namespace, return its definition,
 else return nil."
-  (let ((namespace (rxx-find-symbol-namespace symbol)))
+  (let ((namespace (rxx-find-symbol-namespace symbol namespace)))
     (when namespace
       (symbol-value (rxx-def-global-var namespace symbol)))))
 
@@ -695,13 +678,12 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
   (declare (special rxx-env))
   (when (and (symbolp form) (elu-ends-with (symbol-name form) "?"))
     (setq form (list 'opt (intern (substring (symbol-name form) 0 -1)))))
-  (cond ((and (consp form) (symbolp (first form))
-	      (get-rxx-inst (symbol-value (rxx-get-symbol-local-var (first form)))))
+  (cond (;; the (my-regexp grp-name) version, e.g. (number numerator)
+	 (rxx-find-def (car-safe form))
 	 (rxx-process-named-grp (list 'named-grp (second form)
 				      (first form))))
-	((and (symbolp form) (rxx-get-symbol-local-var form)
-	      (not (rxx-env-lookup (rxx-get-symbol-local-var form) rxx-env))
-	      (get-rxx-inst (symbol-value (rxx-get-symbol-local-var form))))
+	;; the 'my-regexp' version, e.g. just 'number'
+	((and (symbolp form) (rxx-find-def form))
 	 (rxx-process-named-grp (list 'named-grp form form)))
 	(t (rx-form-orig form rx-parent))))
 
@@ -869,7 +851,8 @@ return the list of parsed numbers, omitting the blanks.   See also
 						    ,`(lambda (match-str)
 							(mapcar (lambda (repeat-grp-name)
 								  (rxx-match-val (list repeat-grp-name (quote ,grp-name))))
-								(elu-when-bound repeat-grp-names)))))
+								(elu-when-bound repeat-grp-names)))
+						    :namespace (quote ,(elu-when-bound rxx-cur-namespace))))
 				     match-str
 				     (not 'partial-ok) 'error-ok)))))
 		      parse-result)))))
@@ -908,6 +891,7 @@ then don't need the special recurse form."
 	     
     (let* ((max-lisp-eval-depth (max max-lisp-eval-depth rxx-max-lisp-eval-depth))
 	   (max-specpdl-size (max max-specpdl-size rxx-max-specpdl-size))
+	   (rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env))
 	   (rxx-num-grps 0)
 	   rxx-or-branch
@@ -979,8 +963,8 @@ the parsed result in case of match, or nil in case of mismatch."
   ;; add options to:
   ;;   - work with re-search-forward and re-search-bwd.
   ;;
-  
-  (unless s (error "rxx-parse: nil string"))
+  (check-type  aregexp (or rxx-def rxx-inst))
+  (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
   (save-match-data
     (let* ((rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
 	   (error-msg (format "Error parsing \`%s\' as \`%s\'" s
@@ -1011,6 +995,8 @@ the parsed result in case of match, or nil in case of mismatch."
   ;; add options to:
   ;;   - work with re-search-forward and re-search-bwd.
   ;;
+  (check-type  aregexp (or rxx-def rxx-inst))
+  (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
       (let* ((old-point (point))
 	     (rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
 	     (error-msg (format "Error parsing \`%s\' as %s"
@@ -1056,18 +1042,17 @@ creates a dummy var."
   `(let (,(or var (make-symbol "dummy-var")))
      (while
 	 (setq ,var
-	       (rxx-search-fwd (symbol-value
-				(rxx-get-symbol-local-var (quote ,symbol) (quote ,namespace))) (not 'boundary) 'no-error))
+	       (rxx-search-fwd (rxx-find-def (quote ,symbol) (quote ,namespace)) (not 'boundary) 'no-error))
        ,@forms)))
 
 (defmacro rxx-parse-string (namespace symbol string &optional partial-match-ok error-ok)
-  `(rxx-parse (symbol-value (rxx-get-symbol-local-var (quote ,symbol) (quote ,namespace)))
+  `(rxx-parse (rxx-find-def (quote ,symbol) (quote ,namespace))
 	      ,string
 	      ,partial-match-ok ,error-ok))
 
 
 (defmacro rxx-parse-string-func (namespace symbol string &optional partial-match-ok error-ok)
-  `(rxx-parse (symbol-value (rxx-get-symbol-local-var ,symbol ,namespace))
+  `(rxx-parse (rxx-find-def ,symbol ,namespace)
 	      ,string
 	      ,partial-match-ok ,error-ok))
 
@@ -1119,13 +1104,15 @@ Fields:
   "Kill local rxx vars"
   (interactive)
   (makunbound 'rxx-cur-namespace)
-  (let (vars-killed)
-    (dolist (var (delq nil (mapcar 'car-safe (buffer-local-variables))) vars-killed)
-      (when (and (symbolp var)
-		 (elu-ends-with (symbol-name var) "-rxx-def-local"))
-	(kill-local-variable var)
-	(push var vars-killed)))
-    (message "%s rxx local vars killed: %s" (length vars-killed) vars-killed)))
+  (when nil
+    (let (vars-killed)
+      (dolist (var (delq nil (mapcar 'car-safe (buffer-local-variables))) vars-killed)
+	(when (and (symbolp var)
+		   (elu-ends-with (symbol-name var) "-rxx-def-local"))
+	  (kill-local-variable var)
+	  (push var vars-killed)))
+      (message "%s rxx local vars killed: %s" (length vars-killed) vars-killed)))
+  )
 
 (provide 'rxx)
 
