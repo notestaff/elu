@@ -762,11 +762,12 @@ to be wrapped in shy groups; this can prevent unexpected behaviors.
 "
   (declare (special rxx-or-num) (special rxx-or-branch)
 	   (special rxx-or-child))
-  (let (clause-results)
-    (elu-do-seq (clause i (cdr form))
-	(let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
-	      (rxx-or-child (cons i rxx-or-child)))
-	  (push (rx-group-if (rx-form clause '|) '*) clause-results)))))
+  (if (null (cdr form)) rxx-never-match
+    (let (clause-results)
+      (elu-do-seq (clause i (cdr form))
+	  (let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
+		(rxx-or-child (cons i rxx-or-child)))
+	    (push (rx-group-if (rx-form clause '|) '*) clause-results))))))
 
 (defvar rx-greedy-flag)
 
@@ -911,6 +912,7 @@ then don't need the special recurse form."
 				      (named-group . named-grp) (shy-group . shy-grp)
 				      (named-backref . (rxx-process-named-backref 1 1)))
 				    rx-constituents))
+	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents))
 	   
 	   ;; also allow named-group or ngrp or other names
 	   ;; var: regexp - the string regexp for the form.
