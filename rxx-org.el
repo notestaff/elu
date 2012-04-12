@@ -62,7 +62,14 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
-  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) org-todo-keywords-1))) eow) the-todo)
+  ;  ((one-of str-list) "one of a list of strings"
+  ;    (seq bow (named-grp the-todo (eval-rxx (cons (quote or) str-list))) eow)
+  ; (todo "the todo keyword" (named-grp todo-kw (one-of org-todo-keywords-1)))
+
+  ;(todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) todo-keywords))) eow) the-todo
+  ;   (todo-keywords (elu-when-bound todo-keywords )
+  ;
+  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons 'or org-todo-keywords-1))) eow) the-todo)
   
   (priority-char "A priority character.  Parsed as the priority char."
 		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority))
@@ -170,6 +177,7 @@
   (let ((num-ok 0))
     (dolist (test-def rxx-org-test-defs)
       (destructuring-bind (name var-settings str expected-result) test-def
+	(message "testing test %s" test-def)
 	(let ((expected-result (if (eq expected-result 'str) str expected-result))
 	      (cur-result
 	       (progv (mapcar 'car var-settings) (mapcar 'cadr var-settings)
