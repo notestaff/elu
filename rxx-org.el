@@ -5,7 +5,7 @@
 
 (def-rxx-namespace org
   "Org mode expressions"
-  :imports elu-valu
+  :imports (std elu-valu)
   )
 
 ;; should this be def-rxx-regexp instead?
@@ -63,17 +63,7 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
-  (word-from-list (str-list) "one of a list of words" (seq bow (eval-rxx (cons 'or str-list)) eow))
-
-  ;  ((one-of str-list) "one of a list of strings"
-  ;    (seq bow (named-grp the-todo (eval-rxx (cons (quote or) str-list))) eow)
-  ; (todo "the todo keyword" (named-grp todo-kw (one-of org-todo-keywords-1)))
-
-  ;(todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) todo-keywords))) eow) the-todo
-  ;   (todo-keywords (elu-when-bound todo-keywords )
-  ;
-;  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons 'or org-todo-keywords-1))) eow) the-todo)
-  (todo "The todo keyword" (word-from-list (org-todo-keywords-1)))
+  ((todo :case-fold-search t) "The todo keyword" (word-from-list (org-todo-keywords-1)))
   
   (priority-char "A priority character.  Parsed as the priority char."
 		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority))

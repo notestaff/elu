@@ -238,7 +238,7 @@ Fields:
   ;; other things to store here:
   ;; case-sens, posix-search, 
   
-  namespace name descr form (parser 'identity) args)
+  namespace name descr form (parser 'identity) args case-fold-search posix-search)
 
 
 
@@ -514,13 +514,19 @@ Params:
   "Construct the name of the global var storing the given rxx-def"
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
 
-(defmacro* def-rxx-regexp (&rest all-args)
+(defmacro* def-rxx-regexp (namespace name-and-opts descr form &optional (parser 'identity)
+				     &aux ((name args case-fold-search-val posix-search)
+					   (destructuring-bind
+					       (name &key args ((:case-fold-search case-fold-search-val) 'default) (posix-search 'default))
+					       (elu-make-seq name-and-opts)
+					     (list name args case-fold-search-val posix-search))))
   "Define an rxx regexp.
 
   Params:
 
     NAMESPACE - the namespace for this regexp.
-    NAME - the name for this regexp within NAMESPACE
+    NAME-AND-OPTS - the name for this regexp within NAMESPACE, and possibly some options.
+      If just a name, can be just the symbol.
     DESCR - a string documenting what this regexp matches, and what the matches are
       parsed into by PARSER
     FORM - the sexp defining the regexp (described below).
@@ -536,18 +542,11 @@ refer to the list of parsed matches as G-LIST.
 
    (named-grp NAME FORM)
 "
-  (if (listp (third all-args))
-      (destructuring-bind (namespace name args descr form &optional (parser 'identity)) all-args
-	  `(defconst ,(rxx-def-global-var namespace name)
-	     (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
-			   :form (quote ,form) :parser (quote ,parser) :args (quote ,args))
-	     ,descr)
-	)
-    (destructuring-bind (namespace name descr form &optional (parser 'identity) &optional args) all-args
-      `(defconst ,(rxx-def-global-var namespace name)
-	 (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
-		       :form (quote ,form) :parser (quote ,parser) :args (quote ,args))
-	 ,descr))))
+  `(defconst ,(rxx-def-global-var namespace name)
+     (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
+		   :form (quote ,form) :parser (quote ,parser) :args (quote ,args)
+		   :case-fold-search (quote ,case-fold-search-val) :posix-search (quote ,posix-search))
+     ,descr))
 
 (defmacro def-rxx-regexps (namespace &rest regexp-defs)
   "Define several regexps in the same NAMESPACE."
@@ -1116,6 +1115,11 @@ the parsed result in case of match, or nil in case of mismatch."
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(def-rxx-namespace std "The standard namespace, with generally applicable regexps")
+
+(def-rxx-regexps std
+  ((word-from-list :args (str-list)) "one of a list of words" (seq bow (eval-rxx (cons 'or str-list)) eow)))
 
 (defstruct rxx-parsed-obj
   "An object that was parsed from a text string.
