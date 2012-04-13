@@ -160,15 +160,15 @@
     (headline ((org-todo-keywords-1 ("TODO" "DONE")))
 	      "* Vsem privet"
 	      (1 nil nil "Vsem privet" nil nil))
-    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  nil ("new" "work")))
     (int-ratio nil "3/4" .75)
     (percentage nil "33%" .33)
-    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [2/4]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .5 ("new" "work")))
-    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [75%]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .75 ("new" "work")))
     ))

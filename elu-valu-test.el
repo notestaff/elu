@@ -29,4 +29,4 @@
 	       regexp-name test-str test-result result-now)
       (should (equal result-now test-result)))))
 
-
+(defun elu-valu-run-tests () (interactive) (ert-run-tests-batch-and-exit "elu-valu-test-suite"))
