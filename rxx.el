@@ -1091,27 +1091,27 @@ in namespace NAMESPACE."
 		       (buffer-substring-no-properties (point) (or ,bound (point-max)))
 		       ,partial-match-ok (not 'error-ok))))
 
-(defun rxx-parse-bwd (aregexp &optional bound partial-match-ok)
-  "Match the current buffer against the given extended regexp, and return
-the parsed result in case of match, or nil in case of mismatch."
-  ;; add options to:
-  ;;   - work with re-search-forward and re-search-bwd.
-  ;;
-  (elu-save match-data excursion
-    (let ((old-point (point))
-	  (rxx-inst (or (get-rxx-inst aregexp)
-			(error "Need annotated regexp returned by `rxx'; got `%s'" aregexp))))
-      (if (and (re-search-backward (rxx-inst regexp aregexp) bound 'noerror)
-	       (or partial-match-ok
-		   (and (= (match-beginning 0) bound)
-			(= (match-end 0) old-point))))
-	  (let* ((rxx-env (rxx-inst-env rxx-inst))
-		 rxx-object)
-	    (rxx-call-parser rxx-inst (match-string 0)))
-	(error "Error parsing \`%s\' as %s" (if (and bound (>= bound old-point) (< (- bound old-point) 100))
-						(buffer-substring old-point bound)
-					      "buffer text")
-	       (or (rxx-inst-descr rxx-inst) (rxx-inst-form rxx-inst)))))))
+;; (defun rxx-parse-bwd (aregexp &optional bound partial-match-ok)
+;;   "Match the current buffer against the given extended regexp, and return
+;; the parsed result in case of match, or nil in case of mismatch."
+;;   ;; add options to:
+;;   ;;   - work with re-search-forward and re-search-bwd.
+;;   ;;
+;;   (elu-save match-data excursion
+;;     (let ((old-point (point))
+;; 	  (rxx-inst (or (get-rxx-inst aregexp)
+;; 			(error "Need annotated regexp returned by `rxx'; got `%s'" aregexp))))
+;;       (if (and (re-search-backward (rxx-inst regexp aregexp) bound 'noerror)
+;; 	       (or partial-match-ok
+;; 		   (and (= (match-beginning 0) bound)
+;; 			(= (match-end 0) old-point))))
+;; 	  (let* ((rxx-env (rxx-inst-env rxx-inst))
+;; 		 rxx-object)
+;; 	    (rxx-call-parser rxx-inst (match-string 0)))
+;; 	(error "Error parsing \`%s\' as %s" (if (and bound (>= bound old-point) (< (- bound old-point) 100))
+;; 						(buffer-substring old-point bound)
+;; 					      "buffer text")
+;; 	       (or (rxx-inst-descr rxx-inst) (rxx-inst-form rxx-inst)))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
