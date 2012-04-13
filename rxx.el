@@ -659,10 +659,7 @@ the parsed object matched by this named group."
 (defun rxx-process-eval-rxx (form &optional rx-parent)
   "Parse and produce code from FORM, which is `(eval-rxx FORM)'."
   (declare (special rxx-num-grps))
-  (rxx-process-eval-regexp
-   (list 'regexp
-	 (rxx-inst-regexp
-	  (rxx-instantiate (make-rxx-def :form (eval (second form))))))))
+  (rxx-process-named-grp (list 'named-grp (make-symbol "anon-grp") form)))
 
 ;; The following functions are created by the `elu-flet' call
 ;; in `rxx-instantiate', rather than being explicitly defined.

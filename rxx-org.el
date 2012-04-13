@@ -62,7 +62,7 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
-  (word-from-list (str-list) "one of a list of words" (seq bow (named-grp the-word (eval-rxx (cons (quote or) str-list))) eow))
+  (word-from-list (str-list) "one of a list of words" (seq bow (eval-rxx (cons 'or str-list)) eow))
 
   ;  ((one-of str-list) "one of a list of strings"
   ;    (seq bow (named-grp the-todo (eval-rxx (cons (quote or) str-list))) eow)
