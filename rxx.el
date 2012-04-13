@@ -514,7 +514,7 @@ Params:
   "Construct the name of the global var storing the given rxx-def"
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
 
-(defmacro* def-rxx-regexp (namespace name descr form &optional (parser 'identity) args)
+(defmacro* def-rxx-regexp (&rest all-args)
   "Define an rxx regexp.
 
   Params:
@@ -536,10 +536,18 @@ refer to the list of parsed matches as G-LIST.
 
    (named-grp NAME FORM)
 "
-  `(defconst ,(rxx-def-global-var namespace name)
-     (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
-		   :form (quote ,form) :parser (quote ,parser) :args (quote ,args))
-     ,descr))
+  (if (listp (third all-args))
+      (destructuring-bind (namespace name args descr form &optional (parser 'identity)) all-args
+	  `(defconst ,(rxx-def-global-var namespace name)
+	     (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
+			   :form (quote ,form) :parser (quote ,parser) :args (quote ,args))
+	     ,descr)
+	)
+    (destructuring-bind (namespace name descr form &optional (parser 'identity) &optional args) all-args
+      `(defconst ,(rxx-def-global-var namespace name)
+	 (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
+		       :form (quote ,form) :parser (quote ,parser) :args (quote ,args))
+	 ,descr))))
 
 (defmacro def-rxx-regexps (namespace &rest regexp-defs)
   "Define several regexps in the same NAMESPACE."
