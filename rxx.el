@@ -618,7 +618,8 @@ the parsed object matched by this named group."
 	    (and (eq (car-safe grp-def-raw) 'eval-rxx)
 		 (make-rxx-def :form (eval (second grp-def-raw))))
 	    (make-rxx-def :form grp-def-raw)))
-	  (regexp-here-raw (rx-to-string (rxx-def-form grp-def) 'no-group))
+	  (regexp-here-raw
+	   (rxx-with-args grp-def grp-actual-args))
 	  (regexp-here (format "\\(%s\\)"
 			       (if (and (boundp 'rxx-disable-grps) (member grp-name rxx-disable-grps))
 				   ".*"
@@ -682,8 +683,12 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
     (setq form (list 'opt (intern (substring (symbol-name form) 0 -1)))))
   (cond (;; the (my-regexp grp-name) version, e.g. (number numerator)
 	 (rxx-find-def (car-safe form))
-	 (rxx-process-named-grp (list 'named-grp (second form)
-				      (first form))))
+	 (if (symbolp (second form))
+	     (destructuring-bind (rxx-name grp-name) form
+	       (rxx-process-named-grp `(named-grp ,grp-name ,rxx-name)))
+	   (destructuring-bind (rxx-name grp-arglist &optional (grp-name rxx-name)) form
+	     (rxx-process-named-grp `(named-grp
+				      ,grp-name ,rxx-name ,@grp-arglist)))))
 	;; the 'my-regexp' version, e.g. just 'number'
 	((and (symbolp form) (rxx-find-def form))
 	 (rxx-process-named-grp (list 'named-grp form form)))
@@ -930,6 +935,13 @@ then don't need the special recurse form."
       (make-rxx-inst :def rxx-def 
 		     :env rxx-env
 		     :regexp regexp))))
+
+(defun rxx-with-args (rxx-def &optional actual-args)
+  "Instantiate with args"
+  (let ((actual-args-val (eval (cons 'list actual-args))))
+    (eval
+     `(destructuring-bind ,(rxx-def-args rxx-def) (quote ,actual-args-val)
+	(rx-to-string (rxx-def-form rxx-def) 'no-group)))))
 
 (defun rxx-instantiate (rxx-def &optional actual-args)
   "Instantiate with args"

@@ -62,8 +62,8 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
-  (one-of "one of a list of words" (seq bow (named-grp str-list (eval-rxx (cons (quote or) str-list))) eow)
-	  identity (str-list))
+  (word-from-list "one of a list of words" (seq bow (named-grp the-word (eval-rxx (cons (quote or) str-list))) eow)
+		  identity (str-list))
 
   ;  ((one-of str-list) "one of a list of strings"
   ;    (seq bow (named-grp the-todo (eval-rxx (cons (quote or) str-list))) eow)
@@ -72,7 +72,8 @@
   ;(todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons (quote or) todo-keywords))) eow) the-todo
   ;   (todo-keywords (elu-when-bound todo-keywords )
   ;
-  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons 'or org-todo-keywords-1))) eow) the-todo)
+;  (todo "The todo keyword" (seq bow (named-grp the-todo (eval-rxx (cons 'or org-todo-keywords-1))) eow) the-todo)
+  (todo "The todo keyword" (word-from-list (org-todo-keywords-1)))
   
   (priority-char "A priority character.  Parsed as the priority char."
 		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority))
