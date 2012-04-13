@@ -1,4 +1,5 @@
 
+(require 'elu)
 (require 'rxx)
 (require 'elu-valu)
 
@@ -183,7 +184,7 @@
 	(message "testing test %s" test-def)
 	(let ((expected-result (if (eq expected-result 'str) str expected-result))
 	      (cur-result
-	       (progv (mapcar 'car var-settings) (mapcar 'cadr var-settings)
+	       (elu-progv (mapcar 'car var-settings) (mapcar 'cadr var-settings)
 		 (rxx-reset)
 		 (condition-case err
 		     (rxx-parse-string-func 'org name str)
