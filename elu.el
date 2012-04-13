@@ -52,6 +52,16 @@
   :tag 'elu
   :group 'extensions)
 
+(defcustom elu-dbg-level 1
+  "How much debug info to print.  See `elu-dbg'."
+  :group 'elu
+  :type 'integer)
+
+(defcustom elu-dbg-with-backtrace-p t
+  "Whether to prepend backtrace to dbg msgs.  See `elu-dbg'."
+  :group 'elu
+  :type 'bool)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Functions defined here so they can be used in other definitions
@@ -283,17 +293,56 @@ Return t if any property was actually removed, nil otherwise."
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
 (defmacro elu-dbg (&rest exprs)
   "Print the values of exprs, so you can write e.g. (dbg a b) to print 'a=1 b=2'.
 Returns the value of the last expression."
   `(let ((expr-vals (list ,@exprs)))
-     (when nil (apply 'message
-		      (append (list ,(mapconcat (lambda (expr)
-						  (concat (format "%s" expr) "=%s "))
-						exprs
-						""))
-		    expr-vals)))
-     (car-safe (elu-with-no-warnings (last expr-vals)))))
+     (when (>= elu-dbg-level 1)
+       (apply 'message
+	      (append
+	       (list
+		(concat (if elu-dbg-with-backtrace-p "%s: " "")
+			(mapconcat (lambda (expr)
+				     (concat (format "%s" expr) "=%s"))
+				   (quote ,exprs)
+				   " ")))
+	       (list (when elu-dbg-with-backtrace-p (elu-get-backtrace 'funcs-only)))
+	       expr-vals)))
+     (car-safe (last expr-vals))))
+
+(defun elu-get-backtrace (&optional funcs-only)
+  "Return the current backtrace as a list.
+If FUNCS-ONLY is non-nil, returns only entries corresponding
+to function calls."
+  (with-temp-buffer
+
+    ;; if it's funcs-only, look for lines that start with
+    ;; a symbol that is defined as a function.  (or a macro?)
+    
+    (let* ((standard-output (current-buffer)))
+      (backtrace)
+      (mapcar
+       (lambda (s) (elu-substring-safe s 2))
+       (elu-remove-if
+	(lambda (s)
+	  (not
+	   (or (not funcs-only)
+	       (save-match-data
+		 (string-match (rx (seq string-start (0+ space) (group (1+ (not (any space))))  "(")) s)
+					;(symbol-function (intern (match-string 1)))
+		 ))))
+	(split-string (buffer-string) "\n"))))))
+
+(defmacro elu-assert-equal (expr1 expr2)
+  "If EXPR1 and EXPR2 are not `equal', print the expressions and their values
+and abort with an error."
+  (elu-with-new-symbols (expr1val expr2val)
+    `(let ((,expr1val ,expr1) (,expr2val ,expr2))
+       (unless (equal ,expr1val ,expr2val)
+	 (error "Not equal but should be: \n%s=%s\n%s=%s\n"
+		(format "%s" (quote ,expr1)) ,expr1val 
+		(format "%s" (quote ,expr2)) ,expr2val)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -887,6 +936,16 @@ buffers (either `switch-to-buffer' or`set-buffer')."
 			      (cons ,cur-tick ,cur-val))
 	   ,cur-val)))))
 
+(defun elu-substring-safe (string from &optional to)
+  "Like `substring' but works when TO is beyond string end."
+  (let ((len (length string)))
+    (substring string (elu-clamp from 0 len)
+	       (elu-clamp (or to len) 0 len))))
+
+(defun elu-clamp (val min-val max-val)
+  "Clamp VAL to be between MIN-VAL and MAX-VAL"
+  (min (max val min-val) max-val))
+
 ;;;;;;;;;;;;;;;;;;;
 
 (defun elu-add-font-lock-keywords()
@@ -904,6 +963,12 @@ buffers (either `switch-to-buffer' or`set-buffer')."
   (cons 'progn
 	(mapcar (lambda (module) `(require (quote ,module)))
 		modules)))
+
+;; (defmacro elu-destructuring-bind-func (args expr &rest body)
+;;   "Same as `destructuring-bind' but evaluates ARGS."
+;;   (list
+;;    'eval
+;;     (append (list 'destructuring-bind args  (list 'quote expr)) body)))
 
 (defstruct elu-ratio
   "A ratio of two things."
