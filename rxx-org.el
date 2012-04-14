@@ -63,7 +63,10 @@
 	 (seq bol (sep-by (eval (if org-odd-levels-only "*" ""))
 		    (1+ (named-grp star "*")))) (length star-list))
 
-  ((todo :case-fold-search t) "The todo keyword" (word-from-list (org-todo-keywords-1)))
+  ((todo :args (&optional (which-keywords org-todo-keywords-1)) :case-fold-search t)
+   "The todo keyword" (word-from-list (which-keywords)))
+
+  (not-done-todo "A not-done todo keyword" (todo (org-not-done-keywords)))
   
   (priority-char "A priority character.  Parsed as the priority char."
 		 (eval-regexp (format "[%c-%c]" org-highest-priority org-lowest-priority))
