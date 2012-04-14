@@ -234,6 +234,13 @@ Fields:
      objects.  Either a lisp form, or a one-argument function.  Can refer to the
      result of parsing named subgroups by the subgroup names.
    ARGS - argument list (Common Lisp-style) for instantiating this definition
+   CASE-FOLD-SEARCH - how case sensitivity should be handled when matching this regexp.
+     If nil, force case-sensitive search; if t, force case-insensitive search; if 'default,
+     use the current (scoped-in) case sensitivity setting.  This is an expression that is
+     evaluated at search time, so it can use eg buffer-local variables.
+   POSIX-SEARCH - whether full posix-search should be applied when matching this regexp.
+     If t, force posix search; if nil, use standard Emacs search; if 'default,
+     use the current (scoped-in) value.  See `posix-string-match'.
 "
   ;; other things to store here:
   ;; case-sens, posix-search, 
@@ -287,6 +294,11 @@ if there, otherwise return nil."
 (put 'rxx-error 'error-message "Error in module `rxx'")
 (put 'rxx-parse-error 'error-conditions '(error elu-error rxx-error rxx-parse-error))
 (put 'rxx-parse-error 'error-message "Error parsing an rxx-regexp")
+(put 'rxx-parse-no-match 'error-conditions '(error elu-error rxx-error rxx-parse-error rxx-parse-no-match))
+(put 'rxx-parse-no-match 'error-message "No match found")
+(put 'rxx-parse-ambiguous-match 'error-conditions '(error elu-error rxx-error rxx-parse-error rxx-parse-ambiguous-match))
+(put 'rxx-parse-ambiguous-match 'error-conditions "Ambiguous match for named group")
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -429,7 +441,7 @@ to `match-string', `match-beginning' or `match-end'."
 			   (when match (cons match grp-info))))))
 		   grp-infos))))
       (when matches-here
-	(unless (= (length matches-here) 1) (error "More than one match to group %s: %s" grp-name matches-here))
+	(unless (= (length matches-here) 1) (signal 'rxx-parse-ambiguous-match (list (format "More than one match to group %s: %s" grp-name matches-here))))
 	(let* ((match-info-here (first matches-here))
 	       (match-here (car match-info-here))
 	       (grp-info (cdr match-info-here))
@@ -442,8 +454,7 @@ may be scoped in via RXX-OBJECT.  The annotated regexp must either be passed in 
   (declare (special rxx-object rxx-aregexp grp-info match-here))
   (rxx-match-aux
    (lambda ()
-       (let ((rxx-env (rxx-inst-env grp-info)))
-	 (rxx-call-parser grp-info match-here)))))
+     (rxx-call-parser grp-info match-here))))
 
 (defun rxx-match-string (grp-name &optional object aregexp)
   "Return the substring matched by named group GRP-NAME.  OBJECT, if given, is the string or buffer we last searched;
@@ -515,12 +526,13 @@ Params:
   (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
 
 (defmacro* def-rxx-regexp (namespace name-and-opts descr form &optional (parser 'identity)
+				     (filter t)
 				     &aux ((name args case-fold-search-val posix-search)
 					   (destructuring-bind
 					       (name &key args ((:case-fold-search case-fold-search-val) 'default) (posix-search 'default))
 					       (elu-make-seq name-and-opts)
 					     (list name args case-fold-search-val posix-search))))
-  "Define an rxx regexp.
+  "Define a named rxx-regexp.
 
   Params:
 
@@ -535,6 +547,11 @@ programmatic objects.  If a function, it should take one argument -- the string 
 the whole regexp.   The parser can refer to the results of parsing any named subgroup
 by the name of the subgroup.  If a subgroup G is inside a repeat expression, the parser can
 refer to the list of parsed matches as G-LIST.
+    FILTER - an elisp form or function that provides arbitrary additional constraints on what
+      is matched by this rxx-regexp.  rxx functions such as `rxx-search-forward' will skip over
+      matches matched by the regexp but rejected by the filter.  Returns t to accept a match,
+      nil to reject it.  Can also return a marker-or-position showing that extending
+      the match to that position would make it valid.  
 
  Syntax of FORM:
 
@@ -668,6 +685,7 @@ the parsed object matched by this named group."
 (declare-function rx-submatch-orig "rxx.el" t 'fileonly)
 (declare-function rx-regexp-orig "rxx.el" t 'fileonly)
 (declare-function rx-kleene-orig "rxx.el" t 'fileonly)
+(declare-function rx-or-orig "rxx.el" t 'fileonly)
 
 (defun rxx-form (form &optional rx-parent)
   "Handle named subexpressions.  Any symbol whose variable value
@@ -774,11 +792,13 @@ to be wrapped in shy groups; this can prevent unexpected behaviors.
   (declare (special rxx-or-num) (special rxx-or-branch)
 	   (special rxx-or-child))
   (if (null (cdr form)) rxx-never-match
-    (let (clause-results)
-      (elu-do-seq (clause i (cdr form))
-	  (let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
-		(rxx-or-child (cons i rxx-or-child)))
-	    (push (rx-group-if (rx-form clause '|) '*) clause-results))))))
+    (rx-or-orig form)))
+    ;; (let (clause-results)
+    ;;   (elu-do-seq (clause i (cdr form))
+    ;; 	  (let ((rxx-or-branch (cons rxx-or-num rxx-or-branch))
+    ;; 		(rxx-or-child (cons i rxx-or-child)))
+    ;; 	    (push (rx-group-if (rx-form clause '|) '*) clause-results)))
+    ;;   clause-results)))
 
 (defvar rx-greedy-flag)
 
@@ -899,7 +919,8 @@ then don't need the special recurse form."
   (elu-flet ((rx-form rxx-form)
 	     (rx-submatch rxx-submatch)
 	     (rx-regexp rxx-regexp)
-	     (rx-kleene rxx-kleene))
+	     (rx-kleene rxx-kleene)
+	     (rx-or rxx-or))
 	     
     (let* ((max-lisp-eval-depth (max max-lisp-eval-depth rxx-max-lisp-eval-depth))
 	   (max-specpdl-size (max max-specpdl-size rxx-max-specpdl-size))
@@ -980,8 +1001,28 @@ then don't need the special recurse form."
 ;; Section: Searching and parsing
 ;;
 ;; User-callable functions for searching and parsing aregexps.
+;; These functions should be used with rxx-regexps in place of the corresponding
+;; standard Elisp ones.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun* rxx-string-match (rxx-def string &optional start)
+  "Find the first match for RXX-DEF in STRING."
+
+  (let ((rxx-inst (rxx-instantiate rxx-def)))
+    ;; set case-fold-search as needed
+    ;; choose string-match or posix-string-match as needed
+    (while t
+      (let ((match-start-pos (string-match (rxx-inst-regexp rxx-inst) string start)))
+	(unless match-start-pos (return-from rxx-string-match nil))
+	;; validate the match.
+	;; this is similar to parsing.
+
+	
+	
+      )
+    )
+  ))
 
 (defun* rxx-parse (aregexp s &optional partial-match-ok error-ok)
   "Match the string against the given extended regexp, and return
@@ -1001,6 +1042,13 @@ the parsed result in case of match, or nil in case of mismatch."
       ;;   -- if no match, go to the next.
       ;; if partial match ok, longer partial match is generally better.
       ;; so, possibly, match each string.  (or only when rxx-longest-match-p is true?)
+
+
+      ;;
+      ;; so, this really is a wrapper around the standard emacs routines.
+      ;; it's as if, they would have skipped over some solutions.
+      ;; so, the wrapper would normally 
+      ;;
       
       (if (not (funcall (if (elu-when-bound rxx-posix) 'posix-string-match 'string-match) (rxx-inst-regexp aregexp) s))
 	  (unless error-ok (signal 'rxx-parse-error (list (format "%s: No match" error-msg))))
@@ -1011,8 +1059,7 @@ the parsed result in case of match, or nil in case of mismatch."
 	    (unless (= (match-end 0) (length s))
 	      (if error-ok (setq no-parse t) (signal 'rxx-parse-error (list (format "%s: match ends at %d" error-msg (match-end 0)))))))
 	  (unless no-parse
-	    (let* ((rxx-env (rxx-inst-env rxx-inst))
-		   (rxx-object s))
+	    (let* ((rxx-object s))
 	      (rxx-call-parser rxx-inst (match-string 0 s)))))))))
 
 (defun* rxx-search-fwd (aregexp &optional bound noerror (partial-match-ok t))
@@ -1023,20 +1070,19 @@ the parsed result in case of match, or nil in case of mismatch."
   ;;
   (check-type  aregexp (or rxx-def rxx-inst))
   (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
-      (let* ((old-point (point))
-	     (rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
-	     (error-msg (format "Error parsing \`%s\' as %s"
-				(if (and bound (>= bound old-point) (< (- bound old-point) 100))
-				    (buffer-substring old-point bound)
-				  "buffer text") (rxx-inst-form rxx-inst))))
-	(if (not (re-search-forward (rxx-inst-regexp aregexp) bound 'noerror))
-	    (unless noerror (error "%s" error-msg))
-	  (unless (or noerror partial-match-ok)
-	    (unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
-	    (unless (= (match-end 0) bound) (error "%s: match ends at %d" error-msg (match-end 0))))
-	  (let* ((rxx-env (rxx-inst-env rxx-inst))
-		 rxx-object)
-	    (rxx-call-parser rxx-inst (match-string 0))))))
+  (let* ((old-point (point))
+	 (rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
+	 (error-msg (format "Error parsing \`%s\' as %s"
+			    (if (and bound (>= bound old-point) (< (- bound old-point) 100))
+				(buffer-substring old-point bound)
+			      "buffer text") (rxx-inst-form rxx-inst))))
+    (if (not (re-search-forward (rxx-inst-regexp aregexp) bound 'noerror))
+	(unless noerror (error "%s" error-msg))
+      (unless (or noerror partial-match-ok)
+	(unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
+	(unless (= (match-end 0) bound) (error "%s: match ends at %d" error-msg (match-end 0))))
+      (let* (rxx-object)
+	(rxx-call-parser rxx-inst (match-string 0))))))
 
 (defun* rxx-search-bwd (aregexp &optional bound noerror (partial-match-ok t))
   "Match the current buffer against the given aregexp, and return
@@ -1056,8 +1102,7 @@ the parsed result in case of match, or nil in case of mismatch."
 	  (unless (or noerror partial-match-ok)
 	    (unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
 	    (unless (= (match-end 0) bound) (error "%s: match ends at %d" error-msg (match-end 0))))
-	  (let* ((rxx-env (rxx-inst-env rxx-inst))
-		 rxx-object)
+	  (let* (rxx-object)
 	    (rxx-call-parser rxx-inst (match-string 0))))))
 
 (defmacro rxx-do-search-fwd (namespace symbol var &rest forms)
