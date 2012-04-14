@@ -2,6 +2,8 @@
 (require 'ert)
 (eval-when-compile (require 'cl))
 
+(def-rxx-regexp elu-valu bunch-of-valus "a collection of values"
+  (sep-by (seq "," (opt blanks)) (1+ (valu v))) v-list)
 
 (defconst elu-valu-parse-test-defs
   '((number "three" 3)
@@ -17,7 +19,8 @@
     (valu "0" [cl-struct-elu-valu 0 item])
     (valu "week" [cl-struct-elu-valu 1 week])
     (valu-range "2-3 weeks" ([cl-struct-elu-valu 2 weeks] . [cl-struct-elu-valu 3 weeks]))
-    (valu-range "2-3" ([cl-struct-elu-valu 2 item] . [cl-struct-elu-valu 3 item]))))
+    (valu-range "2-3" ([cl-struct-elu-valu 2 item] . [cl-struct-elu-valu 3 item]))
+    (bunch-of-valus "2,5, 9" ([cl-struct-elu-valu 2 item] [cl-struct-elu-valu 5 item] [cl-struct-elu-valu 9 item]))))
 
 
 (ert-deftest elu-valu-test-suite ()
