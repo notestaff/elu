@@ -365,31 +365,24 @@ environment RXX-ENV.  If already bound, add to the binding."
 	   ,@forms)
 	 (setq ,cur-var (cdr ,cur-var))))))
 
-(defun rxx-env-groups (rxx-env)
-  "Return the list of top-level named groups in the environment RXX-ENV."
-  (let (all-grps)
-    (do-rxx-env grp-name rxx-insts rxx-env
-      (push grp-name all-grps))
-    all-grps))
+(defun rxx-env-symbols (rxx-env)
+  "Return the list of symbols defined in the environment RXX-ENV."
+  (delq nil (mapcar 'car rxx-env)))
 
 (defun rxx-env-empty-p (rxx-env)
   "Return true if there are no bindings in the environment RXX-ENV."
   (null (cdr rxx-env)))
 
-(defun rxx-named-grp-num (grp-name &optional aregexp)
+(defun rxx-named-grp-num (grp-name rxx-inst)
   "Look up the explicitly numbered group number assigned to the
-given named group, for passing as the SUBEXP argument to routines
+named group GRP-NAME, for passing as the SUBEXP argument to routines
 such as `replace-match', `match-substitute-replacement' or
-`replace-regexp-in-string'.  The annotated regexp must either be
-passed in as AREGEXP or scoped in as RXX-AREGEXP. "
-  (declare (special rxx-aregexp))
+`replace-regexp-in-string'.  The annotated regexp must be
+passed in as AREGEXP. "
   (mapcar 'rxx-inst-num
    (rxx-env-lookup
     grp-name
-    (rxx-inst-env
-     (get-rxx-inst
-      (or aregexp (elu-when-bound rxx-aregexp)
-	  (error "The annotated regexp must be either passed in explicitly, or scoped in as `rxx-aregexp'")))))))
+    (rxx-inst-env rxx-inst))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -399,11 +392,12 @@ passed in as AREGEXP or scoped in as RXX-AREGEXP. "
 
 (defun rxx-call-parser (rxx-inst match-str)
   "Call the parser to parse the given match string."
+  (assert (equal (match-string (or (rxx-inst-num rxx-inst) 0) rxx-object) match-str))
   (let ((rxx-env (rxx-inst-env rxx-inst)))
     ;; For each named subgroup, recursively parse what
     ;; it matched and assign the resulting parsed object
     ;; to a variable of the same name as the subgroup.
-    (let* ((symbols (delq nil (mapcar 'car (rxx-inst-env rxx-inst))))
+    (let* ((symbols (rxx-env-symbols (rxx-inst-env rxx-inst)))
 	   (symbol-vals (mapcar
 			 (lambda (symbol)
 			   (rxx-match-val symbol))
@@ -419,15 +413,11 @@ passed in as AREGEXP or scoped in as RXX-AREGEXP. "
   "Common code of `rxx-match-val', `rxx-match-string', `rxx-match-beginning' and `rxx-match-end'.  Looks up the rxx-inst
 for the relevant named group, so that we can get the corresponding group explicitly numbered group number and pass it
 to `match-string', `match-beginning' or `match-end'."
-  (declare (special grp-name object aregexp rxx-object rxx-aregexp rxx-env))
+  (declare (special grp-name object aregexp rxx-object rxx-env))
   (save-match-data
     (let* ((rxx-env
 	    (or (elu-when-bound rxx-env)
-	      (let ((aregexp (or aregexp (when (boundp 'rxx-aregexp) rxx-aregexp))))
-		(rxx-inst-env
-		 (or
-		  (get-rxx-inst aregexp)
-		  (error "Annotated regexp created by `rxx' must either be passed in, or scoped in via RXX-AREGEXP"))))))
+		(rxx-inst-env aregexp)))
 	   (grp-infos (or (rxx-env-lookup grp-name rxx-env) (error "Named group %s not found" grp-name)))
 	   (matches-here
 	    (delq nil
@@ -450,16 +440,16 @@ to `match-string', `match-beginning' or `match-end'."
 
 (defun rxx-match-val (grp-name &optional object aregexp)
   "Return the parsed object matched by named group GRP-NAME.  OBJECT, if given, is the string or buffer we last searched;
-may be scoped in via RXX-OBJECT.  The annotated regexp must either be passed in via AREGEXP or scoped in via RXX-AREGEXP."
-  (declare (special rxx-object rxx-aregexp grp-info match-here))
+may be scoped in via RXX-OBJECT.  The annotated regexp must be passed in via AREGEXP."
+  (declare (special rxx-object grp-info match-here))
   (rxx-match-aux
    (lambda ()
      (rxx-call-parser grp-info match-here))))
 
 (defun rxx-match-string (grp-name &optional object aregexp)
   "Return the substring matched by named group GRP-NAME.  OBJECT, if given, is the string or buffer we last searched;
-may be scoped in via RXX-OBJECT.  The annotated regexp must either be passed in via AREGEXP or scoped in via RXX-AREGEXP."
-  (declare (special rxx-object rxx-aregexp match-here))
+may be scoped in via RXX-OBJECT.  The annotated regexp must be passed in via AREGEXP."
+  (declare (special rxx-object match-here))
   (rxx-match-aux (lambda () match-here)))
 
 (defun rxx-get-marker (pos)
@@ -471,15 +461,15 @@ convert position within the string to buffer marker position"
   pos)
 
 (defun rxx-match-beginning (grp-name &optional object aregexp)
-  "Return the beginning position of the substring matched by named group GRP-NAME.  The annotated regexp must either be
-passed in via AREGEXP or scoped in via RXX-AREGEXP."
+  "Return the beginning position of the substring matched by named group GRP-NAME.  The annotated regexp must be
+passed in via AREGEXP."
   (declare (special grp-num))
   (rxx-match-aux
    (lambda () (rxx-get-marker (match-beginning grp-num)))))
 
 (defun rxx-match-end (grp-name &optional object aregexp)
-  "Return the end position of the substring matched by named group GRP-NAME.  The annotated regexp must either be
-passed in via AREGEXP or scoped in via RXX-AREGEXP."
+  "Return the end position of the substring matched by named group GRP-NAME.  The annotated regexp must be
+passed in via AREGEXP."
   (declare (special grp-num))
   (rxx-match-aux (lambda () (rxx-get-marker (match-end grp-num)))))
 
