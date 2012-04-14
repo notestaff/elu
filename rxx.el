@@ -390,10 +390,10 @@ passed in as AREGEXP. "
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun rxx-call-parser (rxx-inst match-str)
+(defun rxx-call-parser (rxx-inst &optional rxx-object)
   "Call the parser to parse the given match string."
-  (assert (equal (match-string (or (rxx-inst-num rxx-inst) 0) rxx-object) match-str))
-  (let ((rxx-env (rxx-inst-env rxx-inst)))
+  (let ((match-str (match-string (or (rxx-inst-num rxx-inst) 0) rxx-object))
+	(rxx-env (rxx-inst-env rxx-inst)))
     ;; For each named subgroup, recursively parse what
     ;; it matched and assign the resulting parsed object
     ;; to a variable of the same name as the subgroup.
@@ -444,7 +444,7 @@ may be scoped in via RXX-OBJECT.  The annotated regexp must be passed in via ARE
   (declare (special rxx-object grp-info match-here))
   (rxx-match-aux
    (lambda ()
-     (rxx-call-parser grp-info match-here))))
+     (rxx-call-parser grp-info rxx-object))))
 
 (defun rxx-match-string (grp-name &optional object aregexp)
   "Return the substring matched by named group GRP-NAME.  OBJECT, if given, is the string or buffer we last searched;
@@ -1049,8 +1049,7 @@ the parsed result in case of match, or nil in case of mismatch."
 	    (unless (= (match-end 0) (length s))
 	      (if error-ok (setq no-parse t) (signal 'rxx-parse-error (list (format "%s: match ends at %d" error-msg (match-end 0)))))))
 	  (unless no-parse
-	    (let* ((rxx-object s))
-	      (rxx-call-parser rxx-inst (match-string 0 s)))))))))
+	      (rxx-call-parser rxx-inst s)))))))
 
 (defun* rxx-search-fwd (aregexp &optional bound noerror (partial-match-ok t))
   "Match the current buffer against the given extended regexp, and return
@@ -1071,8 +1070,7 @@ the parsed result in case of match, or nil in case of mismatch."
       (unless (or noerror partial-match-ok)
 	(unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
 	(unless (= (match-end 0) bound) (error "%s: match ends at %d" error-msg (match-end 0))))
-      (let* (rxx-object)
-	(rxx-call-parser rxx-inst (match-string 0))))))
+	(rxx-call-parser rxx-inst))))
 
 (defun* rxx-search-bwd (aregexp &optional bound noerror (partial-match-ok t))
   "Match the current buffer against the given aregexp, and return
@@ -1092,8 +1090,7 @@ the parsed result in case of match, or nil in case of mismatch."
 	  (unless (or noerror partial-match-ok)
 	    (unless (= (match-beginning 0) old-point) (error "%s: match starts at %d" error-msg (match-beginning 0)))
 	    (unless (= (match-end 0) bound) (error "%s: match ends at %d" error-msg (match-end 0))))
-	  (let* (rxx-object)
-	    (rxx-call-parser rxx-inst (match-string 0))))))
+	  (rxx-call-parser rxx-inst))))
 
 (defmacro rxx-do-search-fwd (namespace symbol var &rest forms)
   "Searches forward from point for matches to rxx AREGEXP, and evalutes FORMS
