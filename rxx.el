@@ -967,8 +967,8 @@ then don't need the special recurse form."
 (defun rxx-instantiate (rxx-def &optional actual-args)
   "Instantiate with args"
   (eval
-   `(destructuring-bind ,(rxx-def-args rxx-def) ,actual-args
-	(rxx-instantiate-no-args ,rxx-def ,actual-args))))
+   `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
+	(rxx-instantiate-no-args rxx-def actual-args))))
 
 (defmacro rxxlet* (bindings &rest forms)
   (list 'let* (mapcar (lambda (binding) (list (first binding)
