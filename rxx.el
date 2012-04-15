@@ -695,18 +695,21 @@ Also, R? is translated to (opt R) for a slight reduction in verbosity.
   (declare (special rxx-env))
   (when (and (symbolp form) (elu-ends-with (symbol-name form) "?"))
     (setq form (list 'opt (intern (substring (symbol-name form) 0 -1)))))
-  (cond (;; the (my-regexp grp-name) version, e.g. (number numerator)
-	 (rxx-find-def (car-safe form))
-	 (if (symbolp (second form))
-	     (destructuring-bind (rxx-name grp-name) form
-	       (rxx-process-named-grp `(named-grp ,grp-name ,rxx-name)))
-	   (destructuring-bind (rxx-name grp-arglist &optional (grp-name rxx-name)) form
-	     (rxx-process-named-grp `(named-grp
-				      ,grp-name ,rxx-name ,@grp-arglist)))))
-	;; the 'my-regexp' version, e.g. just 'number'
-	((and (symbolp form) (rxx-find-def form))
-	 (rxx-process-named-grp (list 'named-grp form form)))
-	(t (rx-form-orig form rx-parent))))
+  (cond
+   ((assq (car-safe form) rx-constituents)
+    (rx-form-orig form rx-parent))
+   ;; the (my-regexp grp-name) version, e.g. (number numerator)
+   ((rxx-find-def (car-safe form))
+    (if (symbolp (second form))
+	(destructuring-bind (rxx-name grp-name) form
+	  (rxx-process-named-grp `(named-grp ,grp-name ,rxx-name)))
+      (destructuring-bind (rxx-name grp-arglist &optional (grp-name rxx-name)) form
+	(rxx-process-named-grp `(named-grp
+				 ,grp-name ,rxx-name ,@grp-arglist)))))
+   ;; the 'my-regexp' version, e.g. just 'number'
+   ((and (symbolp form) (rxx-find-def form))
+    (rxx-process-named-grp (list 'named-grp form form)))
+   (t (rx-form-orig form rx-parent))))
 
 (defun rxx-submatch (form)
   "Keep a count of the number of non-shy subgroups, so that when a named
