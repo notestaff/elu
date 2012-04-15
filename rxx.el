@@ -264,8 +264,9 @@ Fields:
        `rxx-inst' for the subgroup.
      NUM - the numbered group corresponding to matches of this rxx-inst within the larger regexp. (as would be passed to `match-string').
      REGEXP - the regexp string, as passed to `string-match' etc.
+     ACTUAL-ARGS - the actual args, if any, used to instantiate a parameterized regexp
 "
-  def env num regexp)
+  def env num regexp actual-args)
 
 (defun rxx-inst-form (rxx-inst) (rxx-def-form (rxx-inst-def rxx-inst)))
 (defun rxx-inst-parser (rxx-inst) (rxx-def-parser (rxx-inst-def rxx-inst)))
@@ -397,7 +398,7 @@ passed in as AREGEXP. "
     ;; For each named subgroup, recursively parse what
     ;; it matched and assign the resulting parsed object
     ;; to a variable of the same name as the subgroup.
-    (let* ((symbols (rxx-env-symbols (rxx-inst-env rxx-inst)))
+    (let* ((symbols (rxx-env-symbols rxx-env))
 	   (symbol-vals (mapcar
 			 (lambda (symbol)
 			   (rxx-match-val symbol))
@@ -431,7 +432,8 @@ to `match-string', `match-beginning' or `match-end'."
 			   (when match (cons match grp-info))))))
 		   grp-infos))))
       (when matches-here
-	(unless (= (length matches-here) 1) (signal 'rxx-parse-ambiguous-match (list (format "More than one match to group %s: %s" grp-name matches-here))))
+	(unless (= (length matches-here) 1)
+	  (signal 'rxx-parse-ambiguous-match (list (format "More than one match to group %s: %s" grp-name matches-here))))
 	(let* ((match-info-here (first matches-here))
 	       (match-here (car match-info-here))
 	       (grp-info (cdr match-info-here))
@@ -892,7 +894,7 @@ return the list of parsed numbers, omitting the blanks.   See also
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun rxx-instantiate-no-args (rxx-def)
+(defun rxx-instantiate-no-args (rxx-def actual-args)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
 extensions.  The extensions, taken together, allow specifying simple grammars
 in a modular fashion using regular expressions.
@@ -949,6 +951,7 @@ then don't need the special recurse form."
       (rxx-check-regexp-valid regexp)
       (make-rxx-inst :def rxx-def 
 		     :env rxx-env
+		     :actual-args actual-args
 		     :regexp regexp))))
 
 (defun rxx-with-args (rxx-def &optional actual-args)
@@ -961,8 +964,8 @@ then don't need the special recurse form."
 (defun rxx-instantiate (rxx-def &optional actual-args)
   "Instantiate with args"
   (eval
-   `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
-	(rxx-instantiate-no-args ,rxx-def))))
+   `(destructuring-bind ,(rxx-def-args rxx-def) ,actual-args
+	(rxx-instantiate-no-args ,rxx-def ,actual-args))))
 
 (defmacro rxxlet* (bindings &rest forms)
   (list 'let* (mapcar (lambda (binding) (list (first binding)
