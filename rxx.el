@@ -633,17 +633,13 @@ the parsed object matched by this named group."
 		 (make-rxx-def :form (eval (second grp-def-raw))))
 	    (make-rxx-def :form grp-def-raw)))
 	  (regexp-here-raw
-	   (rxx-with-args grp-def grp-actual-args))
-	  (regexp-here (format "\\(%s\\)"
-			       (if (and (boundp 'rxx-disable-grps) (member grp-name rxx-disable-grps))
-				   ".*"
-				 ;; here remove -any- shy groups around the whole thing.
-				 (rxx-remove-outer-shy-grps regexp-here-raw)))))
+	   (rxx-with-args grp-def grp-actual-args)))
      (rxx-env-bind grp-name (make-rxx-inst
 			     :def grp-def
 			     :num grp-num
-			     :env rxx-env) old-rxx-env)
-     regexp-here)))
+			     :env rxx-env
+			     :regexp regexp-here-raw) old-rxx-env)
+     (concat "\\(" (rxx-remove-outer-shy-grps regexp-here-raw) "\\)"))))
 
 (defun rxx-process-named-backref (form)
   "Process the (named-backref GRP-NAME) form, when called from `rx-to-string'."
