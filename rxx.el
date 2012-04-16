@@ -885,7 +885,7 @@ return the list of parsed numbers, omitting the blanks.   See also
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun rxx-instantiate-no-args (rxx-def actual-args grp-num)
+(defun rxx-instantiate-no-args (rxx-def actual-args grp-num parent-env)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
 extensions.  The extensions, taken together, allow specifying simple grammars
 in a modular fashion using regular expressions.
@@ -900,7 +900,7 @@ then don't need the special recurse form."
 ;(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s"
 ;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
     (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
-	   (rxx-env (rxx-new-env))
+	   (rxx-env (rxx-new-env parent-env))
 	   (regexp
 	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
 	    ;; in the form, it calls back to rxx-process-named-grp, which will
@@ -913,10 +913,11 @@ then don't need the special recurse form."
       (make-rxx-inst :def rxx-def 
 		     :env rxx-env
 		     :actual-args actual-args
-		     :regexp regexp)))
+		     :regexp regexp
+		     :num grp-num )))
 
 
-(defun rxx-instantiate-no-args-top-level (rxx-def actual-args grp-num)
+(defun rxx-instantiate-no-args-top-level (rxx-def actual-args)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
 extensions.  The extensions, taken together, allow specifying simple grammars
 in a modular fashion using regular expressions.
@@ -953,10 +954,8 @@ then don't need the special recurse form."
 				      (named-backref . (rxx-process-named-backref 1 1)))
 				    rx-constituents))
 	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents))
-	   (rxx-cur-namespace (rxx-def-namespace rxx-def))
-	   (rxx-env (rxx-new-env))
 	   (rxx-num-grps 0))
-      (rxx-instantiate-no-args rxx-def actual-args 0))))
+      (rxx-instantiate-no-args rxx-def actual-args 0 (not 'parent-env)))))
 
 (defun rxx-with-args (rxx-def &optional actual-args)
   "Instantiate with args"
@@ -965,18 +964,18 @@ then don't need the special recurse form."
      `(destructuring-bind ,(rxx-def-args rxx-def) (quote ,actual-args-val)
 	(rx-to-string (rxx-def-form rxx-def) 'no-group)))))
 
-(defun rxx-instantiate (rxx-def &optional actual-args grp-num)
+(defun rxx-instantiate (rxx-def &optional actual-args grp-num parent-env)
   "Instantiate with args"
   (eval
    `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
-	(rxx-instantiate-no-args rxx-def actual-args grp-num))))
+	(rxx-instantiate-no-args rxx-def actual-args grp-num parent-env))))
 
 
-(defun rxx-instantiate-top-level (rxx-def &optional actual-args grp-num)
+(defun rxx-instantiate-top-level (rxx-def &optional actual-args)
   "Instantiate with args"
   (eval
    `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
-	(rxx-instantiate-no-args-top-level rxx-def actual-args grp-num))))
+	(rxx-instantiate-no-args-top-level rxx-def actual-args))))
 
 
 (defmacro rxxlet* (bindings &rest forms)
