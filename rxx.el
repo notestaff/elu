@@ -901,14 +901,6 @@ then don't need the special recurse form."
 ;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
     (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env))
-	   (rxx-num-grps (elu-when-bound rxx-num-grps 0))
-	   rxx-or-branch
-	   rxx-or-child
-	   (rxx-or-num 0)
-	   ;; extend the syntax understood by `rx-to-string' with named groups and backrefs
-	   
-	   ;; also allow named-group or ngrp or other names
-	   ;; var: regexp - the string regexp for the form.
 	   (regexp
 	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
 	    ;; in the form, it calls back to rxx-process-named-grp, which will
@@ -946,12 +938,6 @@ then don't need the special recurse form."
 	     
     (let* ((max-lisp-eval-depth (max max-lisp-eval-depth rxx-max-lisp-eval-depth))
 	   (max-specpdl-size (max max-specpdl-size rxx-max-specpdl-size))
-	   (rxx-cur-namespace (rxx-def-namespace rxx-def))
-	   (rxx-env (rxx-new-env))
-	   (rxx-num-grps 0)
-	   rxx-or-branch
-	   rxx-or-child
-	   (rxx-or-num 0)
 	   ;; extend the syntax understood by `rx-to-string' with named groups and backrefs
 	   (rx-constituents (append '((named-grp . (rxx-process-named-grp 1 nil))
 				      (eval-regexp . (rxx-process-eval-regexp 1 1))
@@ -966,7 +952,10 @@ then don't need the special recurse form."
 				      (named-group . named-grp) (shy-group . shy-grp)
 				      (named-backref . (rxx-process-named-backref 1 1)))
 				    rx-constituents))
-	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents)))
+	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents))
+	   (rxx-cur-namespace (rxx-def-namespace rxx-def))
+	   (rxx-env (rxx-new-env))
+	   (rxx-num-grps 0))
       (rxx-instantiate-no-args rxx-def actual-args 0))))
 
 (defun rxx-with-args (rxx-def &optional actual-args)
