@@ -621,19 +621,12 @@ the parsed object matched by this named group."
 	    (or
 	     (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
 	     (and (eq (car-safe grp-def-raw) 'eval-rxx)
-		  (make-rxx-def :form (eval (second grp-def-raw))))
-	     (make-rxx-def :form grp-def-raw)))
+		  (make-rxx-def :form (eval (second grp-def-raw)) :namespace (elu-when-bound rxx-cur-namespace)))
+	     (make-rxx-def :form grp-def-raw :namespace (elu-when-bound rxx-cur-namespace))))
 	   (grp-num (incf rxx-num-grps))
-	   (old-rxx-env rxx-env)
-	   (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
-	   (regexp-here-raw
-	   (rxx-with-args grp-def grp-actual-args)))
-      (rxx-env-bind grp-name (make-rxx-inst
-			      :def grp-def
-			      :num grp-num
-			      :env rxx-env
-			      :regexp regexp-here-raw) old-rxx-env)
-      (concat "\\(" (rxx-remove-outer-shy-grps regexp-here-raw) "\\)"))))
+	   (rxx-inst (rxx-instantiate grp-def (eval (cons 'list grp-actual-args)) grp-num rxx-env)))
+      (rxx-env-bind grp-name rxx-inst rxx-env)
+      (concat "\\(" (rxx-remove-outer-shy-grps (rxx-inst-regexp rxx-inst)) "\\)"))))
 
 (defun rxx-process-named-backref (form)
   "Process the (named-backref GRP-NAME) form, when called from `rx-to-string'."
@@ -901,6 +894,7 @@ then don't need the special recurse form."
 ;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
     (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env parent-env))
+	   (rxx-num-grps-bef rxx-num-grps)
 	   (regexp
 	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
 	    ;; in the form, it calls back to rxx-process-named-grp, which will
@@ -908,14 +902,13 @@ then don't need the special recurse form."
 	    ;; to rxx-name2grp.
 	    (rxx-remove-unneeded-shy-grps
 	     (rxx-replace-posix (rx-to-string (rxx-def-form rxx-def) 'no-group)))))
-      (assert (= rxx-num-grps (regexp-opt-depth regexp)))
+      (assert (= (- rxx-num-grps rxx-num-grps-bef) (regexp-opt-depth regexp)))
       (rxx-check-regexp-valid regexp)
       (make-rxx-inst :def rxx-def 
 		     :env rxx-env
 		     :actual-args actual-args
 		     :regexp regexp
 		     :num grp-num )))
-
 
 (defun rxx-instantiate-no-args-top-level (rxx-def actual-args)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
@@ -957,19 +950,11 @@ then don't need the special recurse form."
 	   (rxx-num-grps 0))
       (rxx-instantiate-no-args rxx-def actual-args 0 (not 'parent-env)))))
 
-(defun rxx-with-args (rxx-def &optional actual-args)
-  "Instantiate with args"
-  (let ((actual-args-val (eval (cons 'list actual-args))))
-    (eval
-     `(destructuring-bind ,(rxx-def-args rxx-def) (quote ,actual-args-val)
-	(rx-to-string (rxx-def-form rxx-def) 'no-group)))))
-
 (defun rxx-instantiate (rxx-def &optional actual-args grp-num parent-env)
   "Instantiate with args"
   (eval
    `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
 	(rxx-instantiate-no-args rxx-def actual-args grp-num parent-env))))
-
 
 (defun rxx-instantiate-top-level (rxx-def &optional actual-args)
   "Instantiate with args"
