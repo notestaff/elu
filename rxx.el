@@ -617,15 +617,15 @@ the parsed object matched by this named group."
   (declare (special rxx-num-grps rxx-env))
   (rx-check form)
   (destructuring-bind (named-grp grp-name grp-def-raw &rest grp-actual-args) form
-    (let* ((grp-num (incf rxx-num-grps))
-	   (old-rxx-env rxx-env)
-	   (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
-	   (grp-def
+    (let* ((grp-def
 	    (or
 	     (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
 	     (and (eq (car-safe grp-def-raw) 'eval-rxx)
 		  (make-rxx-def :form (eval (second grp-def-raw))))
 	     (make-rxx-def :form grp-def-raw)))
+	   (grp-num (incf rxx-num-grps))
+	   (old-rxx-env rxx-env)
+	   (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
 	   (regexp-here-raw
 	   (rxx-with-args grp-def grp-actual-args)))
       (rxx-env-bind grp-name (make-rxx-inst
@@ -860,7 +860,7 @@ return the list of parsed numbers, omitting the blanks.   See also
 			    (save-match-data
 			      (setq parse-result
 				    (rxx-parse
-				     (rxx-instantiate
+				     (rxx-instantiate-top-level
 				      (make-rxx-def :form repeat-form
 						    :parser
 						    ,`(lambda (match-str)
@@ -885,7 +885,7 @@ return the list of parsed numbers, omitting the blanks.   See also
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun rxx-instantiate-no-args (rxx-def actual-args)
+(defun rxx-instantiate-no-args (rxx-def actual-args grp-num)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
 extensions.  The extensions, taken together, allow specifying simple grammars
 in a modular fashion using regular expressions.
@@ -893,7 +893,46 @@ in a modular fashion using regular expressions.
 For detailed description, see `rxx'.
 
 *** FIXME handle recursion depth here: keep track of definitions already instantiated,
-(can base this on eq.)
+\(can base this on eq.)
+if this one already was then do what we did before for recursion.
+then don't need the special recurse form."
+(declare (special rxx-defs-instantiated) (special rxx-recurs-depth))
+;(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s"
+;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
+    (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
+	   (rxx-env (rxx-new-env))
+	   (rxx-num-grps (elu-when-bound rxx-num-grps 0))
+	   rxx-or-branch
+	   rxx-or-child
+	   (rxx-or-num 0)
+	   ;; extend the syntax understood by `rx-to-string' with named groups and backrefs
+	   
+	   ;; also allow named-group or ngrp or other names
+	   ;; var: regexp - the string regexp for the form.
+	   (regexp
+	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
+	    ;; in the form, it calls back to rxx-process-named-grp, which will
+	    ;; Add a mapping from the group's name to rxx-grp structure
+	    ;; to rxx-name2grp.
+	    (rxx-remove-unneeded-shy-grps
+	     (rxx-replace-posix (rx-to-string (rxx-def-form rxx-def) 'no-group)))))
+      (assert (= rxx-num-grps (regexp-opt-depth regexp)))
+      (rxx-check-regexp-valid regexp)
+      (make-rxx-inst :def rxx-def 
+		     :env rxx-env
+		     :actual-args actual-args
+		     :regexp regexp)))
+
+
+(defun rxx-instantiate-no-args-top-level (rxx-def actual-args grp-num)
+  "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
+extensions.  The extensions, taken together, allow specifying simple grammars
+in a modular fashion using regular expressions.
+
+For detailed description, see `rxx'.
+
+*** FIXME handle recursion depth here: keep track of definitions already instantiated,
+\(can base this on eq.)
 if this one already was then do what we did before for recursion.
 then don't need the special recurse form."
 (declare (special rxx-defs-instantiated) (special rxx-recurs-depth))
@@ -909,7 +948,7 @@ then don't need the special recurse form."
 	   (max-specpdl-size (max max-specpdl-size rxx-max-specpdl-size))
 	   (rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env))
-	   (rxx-num-grps (elu-when-bound rxx-num-grps 0))
+	   (rxx-num-grps 0)
 	   rxx-or-branch
 	   rxx-or-child
 	   (rxx-or-num 0)
@@ -927,23 +966,8 @@ then don't need the special recurse form."
 				      (named-group . named-grp) (shy-group . shy-grp)
 				      (named-backref . (rxx-process-named-backref 1 1)))
 				    rx-constituents))
-	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents))
-	   
-	   ;; also allow named-group or ngrp or other names
-	   ;; var: regexp - the string regexp for the form.
-	   (regexp
-	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
-	    ;; in the form, it calls back to rxx-process-named-grp, which will
-	    ;; Add a mapping from the group's name to rxx-grp structure
-	    ;; to rxx-name2grp.
-	    (rxx-remove-unneeded-shy-grps
-	     (rxx-replace-posix (rx-to-string (rxx-def-form rxx-def) 'no-group)))))
-      (assert (= rxx-num-grps (regexp-opt-depth regexp)))
-      (rxx-check-regexp-valid regexp)
-      (make-rxx-inst :def rxx-def 
-		     :env rxx-env
-		     :actual-args actual-args
-		     :regexp regexp))))
+	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents)))
+      (rxx-instantiate-no-args rxx-def actual-args 0))))
 
 (defun rxx-with-args (rxx-def &optional actual-args)
   "Instantiate with args"
@@ -952,11 +976,19 @@ then don't need the special recurse form."
      `(destructuring-bind ,(rxx-def-args rxx-def) (quote ,actual-args-val)
 	(rx-to-string (rxx-def-form rxx-def) 'no-group)))))
 
-(defun rxx-instantiate (rxx-def &optional actual-args)
+(defun rxx-instantiate (rxx-def &optional actual-args grp-num)
   "Instantiate with args"
   (eval
    `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
-	(rxx-instantiate-no-args rxx-def actual-args))))
+	(rxx-instantiate-no-args rxx-def actual-args grp-num))))
+
+
+(defun rxx-instantiate-top-level (rxx-def &optional actual-args grp-num)
+  "Instantiate with args"
+  (eval
+   `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
+	(rxx-instantiate-no-args-top-level rxx-def actual-args grp-num))))
+
 
 (defmacro rxxlet* (bindings &rest forms)
   (list 'let* (mapcar (lambda (binding) (list (first binding)
@@ -1015,7 +1047,7 @@ the parsed result in case of match, or nil in case of mismatch."
   ;;   - work with re-search-forward and re-search-bwd.
   ;;
   (check-type  aregexp (or rxx-def rxx-inst))
-  (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
+  (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate-top-level aregexp)))
   (save-match-data
     (let* ((rxx-inst aregexp)
 	   (error-msg (format "Error parsing \`%s\' as \`%s\'" s
@@ -1052,7 +1084,7 @@ the parsed result in case of match, or nil in case of mismatch."
   ;;   - work with re-search-forward and re-search-bwd.
   ;;
   (check-type  aregexp (or rxx-def rxx-inst))
-  (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
+  (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate-top-level aregexp)))
   (let* ((old-point (point))
 	 (rxx-inst aregexp)
 	 (error-msg (format "Error parsing \`%s\' as %s"
