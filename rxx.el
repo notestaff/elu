@@ -866,7 +866,9 @@ return the list of parsed numbers, omitting the blanks.   See also
 		      parse-result)))))
 	    (rxx-env-bind (intern (concat (symbol-name grp-name) "-list"))
 			  (make-rxx-inst
-			   :def (make-rxx-def :parser new-parser) :env (rxx-new-env) :num wrap-grp-num)
+			   :def (make-rxx-def :form form
+					      :namespace (quote ,(elu-when-bound rxx-cur-namespace))
+					      :parser new-parser) :env (rxx-new-env) :num wrap-grp-num)
 			  parent-rxx-env))))
       return-value)))
 
