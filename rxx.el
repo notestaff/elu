@@ -207,7 +207,7 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
 		(rxx-subregexp-context-p regexp (match-beginning 0)))
       (setq regexp (replace-match "?:" 'fixedcase 'literal regexp 1))))
     (rxx-check-regexp-valid regexp)
-    (assert (zerop (rxx-opt-depth regexp)))
+    (assert (zerop (regexp-opt-depth regexp)))
     regexp))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -280,10 +280,6 @@ Fields:
 (defun rxx-inst-descr (rxx-inst)
   "Returns the description of the rxx-regexp that this RXX-INST instantiates."
   (rxx-def-descr (rxx-inst-def rxx-inst)))
-
-(defun rxx-opt-depth (aregexp)
-  "Return `regexp-opt-depth' of the regexp string in AREGEXP."
-  (regexp-opt-depth aregexp))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
