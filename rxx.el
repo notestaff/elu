@@ -616,30 +616,24 @@ regexp, you can call `rxx-match-val' after doing a match to get
 the parsed object matched by this named group."
   (declare (special rxx-num-grps rxx-env))
   (rx-check form)
-  (or
-   (and (boundp 'rxx-replace-named-grps)
-	(cdr-safe (assoc (second form) rxx-replace-named-grps)))
-   (let* ((grp-name (second form))
-	  (grp-def-raw
-	   (or (third form) (error "Missing named group definition: %s" form)))
-	  (grp-actual-args (cdddr form))
-	  (grp-num (incf rxx-num-grps))
-	  (old-rxx-env rxx-env)
-	  (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
-	  (grp-def
-	   (or
-	    (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
-	    (and (eq (car-safe grp-def-raw) 'eval-rxx)
-		 (make-rxx-def :form (eval (second grp-def-raw))))
-	    (make-rxx-def :form grp-def-raw)))
-	  (regexp-here-raw
+  (destructuring-bind (named-grp grp-name grp-def-raw &rest grp-actual-args) form
+    (let* ((grp-num (incf rxx-num-grps))
+	   (old-rxx-env rxx-env)
+	   (rxx-env (rxx-new-env old-rxx-env))  ;; within each named group, a new environment for group names
+	   (grp-def
+	    (or
+	     (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
+	     (and (eq (car-safe grp-def-raw) 'eval-rxx)
+		  (make-rxx-def :form (eval (second grp-def-raw))))
+	     (make-rxx-def :form grp-def-raw)))
+	   (regexp-here-raw
 	   (rxx-with-args grp-def grp-actual-args)))
-     (rxx-env-bind grp-name (make-rxx-inst
-			     :def grp-def
-			     :num grp-num
-			     :env rxx-env
-			     :regexp regexp-here-raw) old-rxx-env)
-     (concat "\\(" (rxx-remove-outer-shy-grps regexp-here-raw) "\\)"))))
+      (rxx-env-bind grp-name (make-rxx-inst
+			      :def grp-def
+			      :num grp-num
+			      :env rxx-env
+			      :regexp regexp-here-raw) old-rxx-env)
+      (concat "\\(" (rxx-remove-outer-shy-grps regexp-here-raw) "\\)"))))
 
 (defun rxx-process-named-backref (form)
   "Process the (named-backref GRP-NAME) form, when called from `rx-to-string'."
