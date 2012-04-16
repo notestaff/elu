@@ -222,6 +222,8 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
 (defstruct
   rxx-def
   "The definition of an rxx regexp.
+Brings together the symbolic definition of the regexp and the parser code to parse
+the matches of this regexp into desired programmatic objects.
 
 Fields:
 
@@ -250,7 +252,7 @@ Fields:
 
 
 (defstruct rxx-inst
-  "Information about a particular instantiation of an `rxx-def', either at the
+  "A particular instantiation of an `rxx-def', either at the
 top level or as part of a larger regexp.  When `rxx-instantiate' analyzes an
 sexp defining a regexp, it creates one `rxx-inst' for the overall
 regexp and one for each named subgroup within the regexp.
@@ -259,25 +261,25 @@ matches of this regexp into programmatic objects, and to use this
 regexp as a building block in larger regexps.
 
 Fields:
-     DEF - the definition of the rxx-regexp that we are instantiating
+     DEF - the definition of the rxx-regexp that we're instantiating
      ENV - environment for resolving references to named subgroups of this regexp.  Maps subgroup name to
        `rxx-inst' for the subgroup.
-     NUM - the numbered group corresponding to matches of this rxx-inst within the larger regexp. (as would be passed to `match-string').
+     NUM - the numbered group corresponding to matches of this rxx-inst within the larger regexp (as would be passed to `match-string').
      REGEXP - the regexp string, as passed to `string-match' etc.
      ACTUAL-ARGS - the actual args, if any, used to instantiate a parameterized regexp
 "
   def env num regexp actual-args)
 
-(defun rxx-inst-form (rxx-inst) (rxx-def-form (rxx-inst-def rxx-inst)))
-(defun rxx-inst-parser (rxx-inst) (rxx-def-parser (rxx-inst-def rxx-inst)))
-(defun rxx-inst-descr (rxx-inst) (rxx-def-descr (rxx-inst-def rxx-inst)))
+(defun rxx-inst-form (rxx-inst)
+  "Returns the symbolic definition of the rxx-regexp that RXX-INST instantiates."
+  (rxx-def-form (rxx-inst-def rxx-inst)))
+(defun rxx-inst-parser (rxx-inst)
+  "Returns the parser of the rxx-regexp that RXX-INST instantiates."
+  (rxx-def-parser (rxx-inst-def rxx-inst)))
 
-
-(defun get-rxx-inst (aregexp)
-  "Extract rxx-inst from regexp struct AREGEXP,
-if there, otherwise return nil."
-  (when (rxx-inst-p aregexp)
-    aregexp))
+(defun rxx-inst-descr (rxx-inst)
+  "Returns the description of the rxx-regexp that this RXX-INST instantiates."
+  (rxx-def-descr (rxx-inst-def rxx-inst)))
 
 (defun rxx-opt-depth (aregexp)
   "Return `regexp-opt-depth' of the regexp string in AREGEXP."
@@ -1029,7 +1031,7 @@ the parsed result in case of match, or nil in case of mismatch."
   (check-type  aregexp (or rxx-def rxx-inst))
   (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
   (save-match-data
-    (let* ((rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
+    (let* ((rxx-inst aregexp)
 	   (error-msg (format "Error parsing \`%s\' as \`%s\'" s
 			      (or (rxx-inst-descr rxx-inst) (rxx-inst-form rxx-inst)))))
       
@@ -1066,7 +1068,7 @@ the parsed result in case of match, or nil in case of mismatch."
   (check-type  aregexp (or rxx-def rxx-inst))
   (when (rxx-def-p aregexp) (setq aregexp (rxx-instantiate aregexp)))
   (let* ((old-point (point))
-	 (rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
+	 (rxx-inst aregexp)
 	 (error-msg (format "Error parsing \`%s\' as %s"
 			    (if (and bound (>= bound old-point) (< (- bound old-point) 100))
 				(buffer-substring old-point bound)
@@ -1086,11 +1088,11 @@ the parsed result in case of match, or nil in case of mismatch."
   ;;   - and with posix searches
   ;;
       (let* ((old-point (point))
-	    (rxx-inst (or (get-rxx-inst aregexp) (error "Need annotated regexp returned by `rxx'; got `%s'" aregexp)))
-	    (error-msg (format "Error parsing \`%s\' as %s"
-			       (if (and bound (>= bound old-point) (< (- bound old-point) 100))
-				   (buffer-substring old-point bound)
-				 "buffer text") aregexp)))
+	     (rxx-inst aregexp)
+	     (error-msg (format "Error parsing \`%s\' as %s"
+				(if (and bound (>= bound old-point) (< (- bound old-point) 100))
+				    (buffer-substring old-point bound)
+				  "buffer text") aregexp)))
 	(if (not (re-search-backward (rxx-inst-regexp aregexp) bound 'noerror))
 	    (unless noerror (error "%s" error-msg))
 	  (unless (or noerror partial-match-ok)
