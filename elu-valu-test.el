@@ -26,6 +26,7 @@
 (ert-deftest elu-valu-test-suite ()
   "Test elu-valu"
   (dolist (td elu-valu-parse-test-defs)
+    (message "trying test def: %s" td)
     (let* ((regexp-name (first td)) (test-str (second td)) (test-result (third td))
 	   (result-now (rxx-parse-string-func 'elu-valu regexp-name test-str)))
       (message "regexp %s test-str %s result-old %s result-now %s"
