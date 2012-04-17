@@ -247,7 +247,7 @@ Fields:
   ;; other things to store here:
   ;; case-sens, posix-search, 
   
-  namespace name descr form (parser 'identity) args case-fold-search posix-search)
+  (namespace (elu-when-bound rxx-cur-namespace)) name descr form (parser 'identity) args case-fold-search posix-search)
 
 
 
@@ -621,8 +621,8 @@ the parsed object matched by this named group."
 	    (or
 	     (and (symbolp grp-def-raw) (rxx-find-def grp-def-raw))
 	     (and (eq (car-safe grp-def-raw) 'eval-rxx)
-		  (make-rxx-def :form (eval (second grp-def-raw)) :namespace (elu-when-bound rxx-cur-namespace)))
-	     (make-rxx-def :form grp-def-raw :namespace (elu-when-bound rxx-cur-namespace))))
+		  (make-rxx-def :form (eval (second grp-def-raw))))
+	     (make-rxx-def :form grp-def-raw)))
 	   (grp-num (incf rxx-num-grps))
 	   (rxx-inst (rxx-instantiate grp-def (eval (cons 'list grp-actual-args)) grp-num rxx-env)))
       (rxx-env-bind grp-name rxx-inst rxx-env)
@@ -867,7 +867,6 @@ return the list of parsed numbers, omitting the blanks.   See also
 	    (rxx-env-bind (intern (concat (symbol-name grp-name) "-list"))
 			  (make-rxx-inst
 			   :def (make-rxx-def :form form
-					      :namespace (quote ,(elu-when-bound rxx-cur-namespace))
 					      :parser new-parser) :env (rxx-new-env) :num wrap-grp-num)
 			  parent-rxx-env))))
       return-value)))
@@ -892,18 +891,34 @@ For detailed description, see `rxx'.
 if this one already was then do what we did before for recursion.
 then don't need the special recurse form."
 (declare (special rxx-defs-instantiated) (special rxx-recurs-depth))
-;(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s"
-;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth 0))
+;(message "rxx-instantiate rxx-def=%s rxx-defs-instantiated=%s rxx-recurs-depth=%s rxx-defs-instantiated=%s"
+;	 rxx-def (elu-when-bound rxx-defs-instantiated) (elu-when-bound rxx-recurs-depth "unbound") rxx-defs-instantiated)
+
+;; next: check recurs depth here.
+;; then, won't need the form.
+
+;; so, a parenthetical expr can actually just be in std, parameterized by paren.
+;; (but check about quoting -- ideally, use the syntax table of the buffer to construct the regexp).
+;; then, an sexp can be, a parenthetical expr, but with a parser that calls parse-sexp recursively.
+;; and our own say arithmetic can be, an expr can be a number, an our-paren-expr, or expr op expr.
+;; and our-paren-expr matches just the expr structure but then calls parse to parse what's inside.
+
+;; advantage is that this is all regexps.  and can even insist on proper ones.
     (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env parent-env))
 	   (rxx-num-grps-bef rxx-num-grps)
+	   (recurs-p (memq rxx-def rxx-defs-instantiated))
+	   (rxx-recurs-depth (- (elu-when-bound rxx-recurs-depth 0) (if recurs-p 1 0)))
+	   (rxx-defs-instantiated (cons rxx-def rxx-defs-instantiated))
 	   (regexp
-	    ;; whenever the rx-to-string call below encounters a (named-grp ) construct
-	    ;; in the form, it calls back to rxx-process-named-grp, which will
-	    ;; Add a mapping from the group's name to rxx-grp structure
-	    ;; to rxx-name2grp.
-	    (rxx-remove-unneeded-shy-grps
-	     (rxx-replace-posix (rx-to-string (rxx-def-form rxx-def) 'no-group)))))
+	    (if (and recurs-p (< rxx-recurs-depth 1)) rxx-never-match
+	      (rxx-remove-unneeded-shy-grps
+	       (rxx-replace-posix
+		;; whenever the rx-to-string call below encounters a (named-grp ) construct
+		;; in the form, it calls back to rxx-process-named-grp, which will
+		;; add a mapping from the group's name to rxx-inst structure
+		;; to rxx-env.
+		(rx-to-string (rxx-def-form rxx-def) 'no-group))))))
       (assert (= (- rxx-num-grps rxx-num-grps-bef) (regexp-opt-depth regexp)))
       (rxx-check-regexp-valid regexp)
       (make-rxx-inst :def rxx-def 
@@ -949,7 +964,8 @@ then don't need the special recurse form."
 				      (named-backref . (rxx-process-named-backref 1 1)))
 				    rx-constituents))
 	   (rx-constituents (cons '(or rx-or 0 nil) rx-constituents))
-	   (rxx-num-grps 0))
+	   (rxx-num-grps 0)
+	   rxx-defs-instantiated)
       (rxx-instantiate-no-args rxx-def actual-args 0 (not 'parent-env)))))
 
 (defun rxx-instantiate (rxx-def &optional actual-args grp-num parent-env)
