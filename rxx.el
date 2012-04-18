@@ -624,7 +624,7 @@ the parsed object matched by this named group."
 		  (make-rxx-def :form (eval (second grp-def-raw))))
 	     (make-rxx-def :form grp-def-raw)))
 	   (grp-num (incf rxx-num-grps))
-	   (rxx-inst (rxx-instantiate grp-def (eval (cons 'list grp-actual-args)) grp-num rxx-env)))
+	   (rxx-inst (rxx-instantiate-subexpr grp-def (eval (cons 'list grp-actual-args)) grp-num rxx-env)))
       (rxx-env-bind grp-name rxx-inst rxx-env)
       (concat "\\(" (rxx-remove-outer-shy-grps (rxx-inst-regexp rxx-inst)) "\\)"))))
 
@@ -969,11 +969,11 @@ then don't need the special recurse form."
 	   rxx-defs-instantiated)
       (rxx-instantiate-no-args rxx-def actual-args 0 (not 'parent-env)))))
 
-(defun rxx-instantiate (rxx-def &optional actual-args grp-num parent-env)
+(defun rxx-instantiate-subexpr (rxx-def &optional actual-args grp-num parent-env)
   "Instantiate with args"
   (eval
    `(destructuring-bind ,(rxx-def-args rxx-def) actual-args
-	(rxx-instantiate-no-args rxx-def actual-args grp-num parent-env))))
+		(rxx-instantiate-no-args rxx-def actual-args grp-num parent-env))))
 
 (defun rxx-instantiate-top-level (rxx-def &optional actual-args)
   "Instantiate with args"
@@ -1017,7 +1017,7 @@ then don't need the special recurse form."
 (defun* rxx-string-match (rxx-def string &optional start)
   "Find the first match for RXX-DEF in STRING."
 
-  (let ((rxx-inst (rxx-instantiate rxx-def)))
+  (let ((rxx-inst (rxx-instantiate-top-level rxx-def)))
     ;; set case-fold-search as needed
     ;; choose string-match or posix-string-match as needed
     (while t
