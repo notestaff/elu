@@ -90,11 +90,17 @@
 
   
   (matcher "A tags-and-properties matcher.  Parses as the corresponding form."
-  (seq tags-and-props-matcher? (opt "/" todo-matcher))
-  `(and ,tags-and-props-matcher ,todo-matcher))
+	   (seq tags-and-props-matcher? (opt "/" todo-matcher))
+	   `(and ,tags-and-props-matcher ,todo-matcher))
 
   (tags-and-props-matcher "Tags and properties matcher."
-			  (1+ alnum))
+			  (sep-by "|" (1+ tags-and-props-term)))
+  (tags-and-props-term "One term of the tags-and-props matcher"
+		       (sep-by (opt "&") (1+ tags-and-props-cond)))
+
+  (sign "a sign" (any "+-"))
+  (tags-and-props-cond "One condition"
+		       (seq (opt sign) tag))
 
   (todo-matcher "Todo matcher."
 		(1+ alnum))
@@ -165,6 +171,7 @@
     (headline ((org-odd-levels-only t)  (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [75%]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .75 ("new" "work")))
+    (matcher () "privet/lunatikam" (and "privet" "lunatikam"))
     ))
 
 (defun rxx-org-tests ()
