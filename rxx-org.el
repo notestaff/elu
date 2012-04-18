@@ -94,13 +94,14 @@
 	   `(and ,tags-and-props-matcher ,todo-matcher))
 
   (tags-and-props-matcher "Tags and properties matcher."
-			  (sep-by "|" (1+ tags-and-props-term)))
+			  (sep-by "|" (1+ tags-and-props-term)) (cons 'or tags-and-props-term-list))
   (tags-and-props-term "One term of the tags-and-props matcher"
-		       (sep-by (opt "&") (1+ tags-and-props-cond)))
+		       (sep-by (opt "&") (1+ tags-and-props-cond)) (cons 'and tags-and-props-cond-list))
 
   (sign "a sign" (any "+-"))
+  (braced-regexp "regexp in braces" (parens ("{" "}")) parens)
   (tags-and-props-cond "One condition"
-		       (seq (opt sign) tag))
+		       (seq (opt sign) (or tag braced-regexp)) (list :sign (or sign "+") :tag tag :regexp braced-regexp))
 
   (todo-matcher "Todo matcher."
 		(1+ alnum))
@@ -171,7 +172,8 @@
     (headline ((org-odd-levels-only t)  (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [75%]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .75 ("new" "work")))
-    (matcher () "privet/lunatikam" (and "privet" "lunatikam"))
+    (tags-and-props-matcher () "{privet}&-poka|+work-home" (or (and (:sign "+" :tag nil :regexp "privet") (:sign "-" :tag "poka" :regexp nil)) (and (:sign "+" :tag "work" :regexp nil) (:sign "-" :tag "home" :regexp nil))))
+;    (matcher () "privet/lunatikam" (and "privet" "lunatikam"))
     ))
 
 (defun rxx-org-tests ()
