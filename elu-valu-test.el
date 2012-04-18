@@ -1,5 +1,5 @@
 (require 'elu-valu)
-(require 'ert)
+(unless (featurep 'xemacs) (require 'ert))
 (eval-when-compile (require 'cl))
 
 (def-rxx-regexp elu-valu bunch-of-valus "a collection of values"
@@ -22,9 +22,10 @@
     (valu-range "2-3" ([cl-struct-elu-valu 2 item] . [cl-struct-elu-valu 3 item]))
     (bunch-of-valus "2,5, 9" ([cl-struct-elu-valu 2 item] [cl-struct-elu-valu 5 item] [cl-struct-elu-valu 9 item]))))
 
+(when (featurep 'xemacs)
+  (defmacro should (x) `(assert ,x)))
 
-(ert-deftest elu-valu-test-suite ()
-  "Test elu-valu"
+(defun elu-valu-do-tests ()
   (dolist (td elu-valu-parse-test-defs)
     (message "trying test def: %s" td)
     (let* ((regexp-name (first td)) (test-str (second td)) (test-result (third td))
@@ -33,4 +34,13 @@
 	       regexp-name test-str test-result result-now)
       (should (equal result-now test-result)))))
 
-(defun elu-valu-run-tests () (interactive) (ert-run-tests-batch-and-exit "elu-valu-test-suite"))
+;  (rxx-parse-string elu-valu number "3")
+
+(unless (featurep 'xemacs)
+  (ert-deftest elu-valu-test-suite ()
+    "Test elu-valu"
+    (elu-valu-do-tests)))
+
+(defun elu-valu-run-tests () (interactive)
+  (if (featurep 'xemacs) (elu-valu-do-tests) (ert-run-tests-batch-and-exit "elu-valu-test-suite")))
+

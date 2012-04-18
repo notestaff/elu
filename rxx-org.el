@@ -151,18 +151,18 @@
     (stars ((org-odd-levels-only nil)) "***" 3)
     (stars ((org-odd-levels-only t)) "****" (rxx-parse-error "Error parsing `****' as `The initial stars of an Org headline.  Parses as the level.': match ends at 3"))
     (todo ((org-todo-keywords-1 ("TODO" "DONE"))) "TODO" str)
-    (headline ((org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t) (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "* Vsem privet"
 	      (1 nil nil "Vsem privet" nil nil))
-    (headline ((org-odd-levels-only t) (org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t) (org-highest-priority ?A) (org-lowest-priority ?C)  (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  nil ("new" "work")))
     (int-ratio nil "3/4" .75)
     (percentage nil "33%" .33)
-    (headline ((org-odd-levels-only t) (org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t)  (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [2/4]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .5 ("new" "work")))
-    (headline ((org-odd-levels-only t) (org-todo-keywords-1 ("TODO" "DONE")))
+    (headline ((org-odd-levels-only t)  (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [75%]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .75 ("new" "work")))
     ))
