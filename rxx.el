@@ -643,12 +643,13 @@ the parsed object matched by this named group."
   (rx-check form)
 
   ;; FIXME do not add shy grp if not needed
-  (concat "\\(?:" (rx-group-if (rxx-make-shy (eval (second form))) rx-parent) "\\)"))
+  (rxx-remove-outer-shy-grps (concat "\\(?:" (rx-group-if (rxx-make-shy (eval (second form))) rx-parent) "\\)")))
 
 (defun rxx-process-eval-rxx (form &optional rx-parent)
   "Parse and produce code from FORM, which is `(eval-rxx FORM)'."
   (declare (special rxx-num-grps))
-  (rxx-process-named-grp (list 'named-grp (make-symbol "anon-grp") form)))
+  ;(rxx-process-named-grp (list 'named-grp (make-symbol "anon-grp") form))
+  (rxx-remove-outer-shy-grps (concat "\\(?:" (rx-group-if (rxx-inst-regexp (rxx-instantiate-subexpr (make-rxx-def :form (eval (second form)))))   rx-parent) "\\)")))
 
 ;; The following functions are created by the `elu-flet' call
 ;; in `rxx-instantiate', rather than being explicitly defined.
