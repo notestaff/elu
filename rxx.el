@@ -1170,7 +1170,9 @@ in namespace NAMESPACE."
 (def-rxx-namespace std "The standard namespace, with generally applicable regexps")
 
 (def-rxx-regexps std
-  ((word-from-list :args (str-list)) "one of a list of words" (seq bow (eval-rxx (cons 'or str-list)) eow)))
+  ((word-from-list :args (str-list)) "one of a list of words" (seq bow (eval-rxx (cons 'or str-list)) eow))
+  ((parens :args (left-paren right-paren)) "stuff in parens" (seq (eval left-paren) (minimal-match (named-grp between-parens (0+ (eval-rxx (list 'not (list 'any right-paren)))))) (eval right-paren))
+	   between-parens))
 
 (defstruct rxx-parsed-obj
   "An object that was parsed from a text string.
