@@ -207,7 +207,7 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
 		(rxx-subregexp-context-p regexp (match-beginning 0)))
       (setq regexp (replace-match "?:" 'fixedcase 'literal regexp 1))))
     (rxx-check-regexp-valid regexp)
-    (assert (zerop (regexp-opt-depth regexp)))
+    (assert (zerop (elu-regexp-opt-depth regexp)))
     regexp))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -654,11 +654,12 @@ the parsed object matched by this named group."
 ;; in `rxx-instantiate', rather than being explicitly defined.
 ;; They reference the original functions from the `rx' package
 ;; temporarily overridden during the `rxx-instantiate' call.
-(declare-function rx-form-orig "rxx.el" t 'fileonly)
-(declare-function rx-submatch-orig "rxx.el" t 'fileonly)
-(declare-function rx-regexp-orig "rxx.el" t 'fileonly)
-(declare-function rx-kleene-orig "rxx.el" t 'fileonly)
-(declare-function rx-or-orig "rxx.el" t 'fileonly)
+(when (fboundp 'declare-function)
+  (declare-function rx-form-orig "rxx.el" t 'fileonly)
+  (declare-function rx-submatch-orig "rxx.el" t 'fileonly)
+  (declare-function rx-regexp-orig "rxx.el" t 'fileonly)
+  (declare-function rx-kleene-orig "rxx.el" t 'fileonly)
+  (declare-function rx-or-orig "rxx.el" t 'fileonly))
 
 (defun rxx-form (form &optional rx-parent)
   "Handle named subexpressions.  Any symbol whose variable value
@@ -919,13 +920,13 @@ then don't need the special recurse form."
 		;; add a mapping from the group's name to rxx-inst structure
 		;; to rxx-env.
 		(rx-to-string (rxx-def-form rxx-def) 'no-group))))))
-      (assert (= (- rxx-num-grps rxx-num-grps-bef) (regexp-opt-depth regexp)))
+      (assert (= (- rxx-num-grps rxx-num-grps-bef) (elu-regexp-opt-depth regexp)))
       (rxx-check-regexp-valid regexp)
-      (make-rxx-inst :def rxx-def 
-		     :env rxx-env
-		     :actual-args actual-args
-		     :regexp regexp
-		     :num grp-num )))
+		(make-rxx-inst :def rxx-def 
+							:env rxx-env
+							:actual-args actual-args
+							:regexp regexp
+							:num grp-num )))
 
 (defun rxx-instantiate-no-args-top-level (rxx-def actual-args)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
