@@ -99,9 +99,16 @@
 		       (sep-by (opt "&") (1+ tags-and-props-cond)) (cons 'and tags-and-props-cond-list))
 
   (sign "a sign" (any "+-"))
-  (braced-regexp "regexp in braces" (parens ("{" "}")) parens)
+  (equality-op "an equality operation" (or "=" "==" "<>" "!="))
+  (op "an operation" (or equality-op ">" "<" ">=" "<=" "=>" ))
+  (braced-regexp "regexp in braces" (in-parens ("{" "}")) in-parens)
+  (prop-name "a property name" (1+ (any alnum "_")))
+  (date-val "a date value" (in-parens ("<" ">")) in-parens)
+  (quoted-val "a quoted value" (or (named-grp date in-parens "\"<" ">\"") (named-grp val in-parens "\"" "\"")) (list :date date :val val))
+  (prop-val "the value of a property for comparison" (or number braced-regexp quoted-val) (list :number number :regexp braced-regexp :val quoted-val))
+  (prop-cond "a condition on a property" (seq prop-name op prop-val) (list :prop-name prop-name :op op :prop-val prop-val))
   (tags-and-props-cond "One condition"
-		       (seq (opt sign) (or tag braced-regexp)) (list :sign (or sign "+") :tag tag :regexp braced-regexp))
+		       (seq (opt sign) (or braced-regexp prop-cond tag)) (list :sign (or sign "+") :tag tag :regexp braced-regexp :prop-cond prop-cond))
 
   (todo-matcher "Todo matcher."
 		(1+ alnum))
@@ -172,15 +179,26 @@
     (headline ((org-odd-levels-only t)  (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "*** TODO [#A] Vsem privet [75%]   :new:work:"
 	      (2 ?A "TODO" "Vsem privet"  .75 ("new" "work")))
-    (tags-and-props-matcher () "{privet}&-poka|+work-home" (or (and (:sign "+" :tag nil :regexp "privet") (:sign "-" :tag "poka" :regexp nil)) (and (:sign "+" :tag "work" :regexp nil) (:sign "-" :tag "home" :regexp nil))))
-;    (matcher () "privet/lunatikam" (and "privet" "lunatikam"))
+    (tags-and-props-matcher () "{privet}-poka&SCHEDULED>\"<now>\"|+work-home"
+			    (or
+			     (and
+			      (:sign "+" :tag nil :regexp "privet" :prop-cond nil)
+			      (:sign "-" :tag "poka" :regexp nil :prop-cond nil)
+			      (:sign "+" :tag nil :regexp nil :prop-cond
+				     (:prop-name "SCHEDULED" :op ">" :prop-val
+						 (:number nil :regexp nil :val
+							  (:date "now" :val nil)))))
+			     (and
+			      (:sign "+" :tag "work" :regexp nil :prop-cond nil)
+			      (:sign "-" :tag "home" :regexp nil :prop-cond nil))))
+					;    (matcher () "privet/lunatikam" (and "privet" "lunatikam"))
     ))
 
 (defun rxx-org-tests ()
   (interactive)
   ;; TODO add code to run this on actual org files.  maybe compare results with the new parser.
   (rxx-reset)
-  (let ((num-ok 0))
+  (let ((num-ok 0) (rxx-posix nil))
     (dolist (test-def rxx-org-test-defs)
       (destructuring-bind (name var-settings str expected-result) test-def
 	(message "testing test %s" test-def)
