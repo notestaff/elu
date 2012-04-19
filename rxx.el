@@ -157,29 +157,6 @@ compatibility.  Adapted from `org-re'."
     (setq re (substring re 4 -2)))
   (rxx-check-regexp-valid re))
 
-(defun rxx-subregexp-context-p (regexp pos &optional start)
-  "Return non-nil if POS is in a normal subregexp context in REGEXP.
-A subregexp context is one where a sub-regexp can appear.
-A non-subregexp context is for example within brackets, or within a
-repetition bounds operator `\\=\\{...\\}', or right after a `\\'.
-If START is non-nil, it should be a position in REGEXP, smaller
-than POS, and known to be in a subregexp context.
-
-Taken from `subregexp-context-p'."
-  ;; Here's one possible implementation, with the great benefit that it
-  ;; reuses the regexp-matcher's own parser, so it understands all the
-  ;; details of the syntax.  A disadvantage is that it needs to match the
-  ;; error string.
-  (save-match-data
-    (condition-case err
-	(progn
-	  (string-match (substring regexp (or start 0) pos) "")
-	  t)
-      (invalid-regexp
-       (not (member (cadr err) '("Unmatched [ or [^"
-				 "Unmatched \\{"
-				 "Trailing backslash")))))))
-
 (defun rxx-make-shy (regexp)
   "Return a new regexp that makes all groups in REGEXP shy; and
 wrap a shy group around the returned REGEXP.  WARNING: this will
@@ -196,15 +173,15 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
     (unless (featurep 'xemacs)
       ;; remove explicitly numbered groups (xemacs does not support them)
       (while (and (string-match "\\\\(\\?\\([0-9]+\\):" regexp)
-		  (rxx-subregexp-context-p regexp (match-beginning 0)))
+		  (elu-subregexp-context-p regexp (match-beginning 0)))
 	(setq regexp (replace-match "" 'fixedcase 'literal regexp 1))))
     ;; remove unnumbered, non-shy groups.
     (if (featurep 'xemacs)
 	(while (and (string-match "\\\\(\\([^?]\\)" regexp)
-		    (rxx-subregexp-context-p regexp (match-beginning 0)))
+		    (elu-subregexp-context-p regexp (match-beginning 0)))
 	  (setq regexp (replace-match "\\(?:\\1" 'fixedcase (not 'literal) regexp)))
     (while (and (string-match "\\\\(\\(\\)[^?]" regexp)
-		(rxx-subregexp-context-p regexp (match-beginning 0)))
+		(elu-subregexp-context-p regexp (match-beginning 0)))
       (setq regexp (replace-match "?:" 'fixedcase 'literal regexp 1))))
     (rxx-check-regexp-valid regexp)
     (assert (zerop (elu-regexp-opt-depth regexp)))
@@ -648,8 +625,12 @@ the parsed object matched by this named group."
 (defun rxx-process-eval-rxx (form &optional rx-parent)
   "Parse and produce code from FORM, which is `(eval-rxx FORM)'."
   (declare (special rxx-num-grps))
-  ;(rxx-process-named-grp (list 'named-grp (make-symbol "anon-grp") form))
   (rxx-remove-outer-shy-grps (concat "\\(?:" (rx-group-if (rxx-inst-regexp (rxx-instantiate-subexpr (make-rxx-def :form (eval (second form)))))   rx-parent) "\\)")))
+
+(defun rxx-process-in-namespace (form &optional rx-parent)
+  "Process in-namespace"
+  (let ((rxx-cur-namespace (second form)))
+    (rx-group-if (rx-to-string (third form)) rx-parent)))
 
 ;; The following functions are created by the `elu-flet' call
 ;; in `rxx-instantiate', rather than being explicitly defined.
@@ -955,6 +936,7 @@ then don't need the special recurse form."
 	   (rx-constituents (append '((named-grp . (rxx-process-named-grp 1 nil))
 				      (eval-regexp . (rxx-process-eval-regexp 1 1))
 				      (eval-rxx . (rxx-process-eval-rxx 1 1))
+				      (in-namespace . (rxx-process-in-namespace 1 1))
 				      (shy-grp . seq)
 				      (& . seq)
 				      (blanks . "\\(?:[[:blank:]]+\\)")
@@ -1167,11 +1149,15 @@ in namespace NAMESPACE."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defmacro rxx-arg (form) "" `(quote (in-namespace ,rxx-cur-namespace ,form)))
+
 (def-rxx-namespace std "The standard namespace, with generally applicable regexps")
 
 (def-rxx-regexps std
   ((word-from-list :args (str-list)) "one of a list of words" (seq bow (eval-rxx (cons 'or str-list)) eow))
-  ((in-parens :args (left-paren right-paren)) "stuff in parens" (seq (eval left-paren) (minimal-match (named-grp between-parens (0+ (eval-rxx (list 'not (list 'any right-paren)))))) (eval right-paren))
+  ((in-parens :args (left-paren right-paren &optional (mid-expr `(not (any ,right-paren)))))
+   "stuff in parens"
+   (seq (eval left-paren) (minimal-match (named-grp between-parens (0+ (eval-rxx mid-expr)))) (eval right-paren))
    between-parens))
 
 (defstruct rxx-parsed-obj

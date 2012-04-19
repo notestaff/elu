@@ -2,7 +2,7 @@ set -e
 set -o pipefail
 emacs -Q --batch --eval "(require 'cl)" -l elu.el -l rxx.el -l elu-valu.el -l elu-valu-test.el -f elu-valu-run-tests
 emacs -Q --batch --eval "(require 'cl)" -l elu.el -l rxx.el -l elu-valu.el -l rxx-org.el -f rxx-org-tests
-xemacs -Q --batch -l rx.el -l elu.el -l rxx.el -l elu-valu.el -l elu-valu-test.el -f elu-valu-run-tests
-xemacs -Q --batch -l rx.el -l elu.el -l rxx.el -l elu-valu.el -l rxx-org.el -f rxx-org-tests
+xemacs -Q --batch -l rx-xemacs.el -l elu.el -l rxx.el -l elu-valu.el -l elu-valu-test.el -f elu-valu-run-tests
+xemacs -Q --batch -l rx-xemacs.el -l elu.el -l rxx.el -l elu-valu.el -l rxx-org.el -f rxx-org-tests
 
 
