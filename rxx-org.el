@@ -163,7 +163,7 @@
   '(
     (stars ((org-odd-levels-only t)) "***" 2)
     (stars ((org-odd-levels-only nil)) "***" 3)
-    (stars ((org-odd-levels-only t)) "****" (rxx-parse-error "Error parsing `****' as `The initial stars of an Org headline.  Parses as the level.': match ends at 3"))
+    (stars ((org-odd-levels-only t)) "****" (rxx-parse-error "Error parsing `****' as `The initial stars of an Org headline.  Parses as the level.': No match"))
     (todo ((org-todo-keywords-1 ("TODO" "DONE"))) "TODO" str)
     (headline ((org-odd-levels-only t) (org-highest-priority ?A) (org-lowest-priority ?C) (org-todo-keywords-1 ("TODO" "DONE")))
 	      "* Vsem privet"

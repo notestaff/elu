@@ -1026,7 +1026,7 @@ the parsed result in case of match, or nil in case of mismatch."
   (save-match-data
     (let* ((rxx-inst aregexp)
 	   (error-msg (format "Error parsing \`%s\' as \`%s\'" s
-			      (or (rxx-inst-descr rxx-inst) (rxx-inst-form rxx-inst)))))
+			      (or (rxx-inst-descr rxx-inst) (rxx-inst-form rxx-inst))))
       
       ;; so, what you need here is just:
       ;;   -- if full match, then parse and be done.
@@ -1040,15 +1040,26 @@ the parsed result in case of match, or nil in case of mismatch."
       ;; it's as if, they would have skipped over some solutions.
       ;; so, the wrapper would normally 
       ;;
-      
-      (if (not (funcall (if (elu-when-bound rxx-posix) 'posix-string-match 'string-match) (rxx-inst-regexp aregexp) s))
-	  (unless error-ok (signal 'rxx-parse-error (list (format "%s: No match" error-msg))))
+	   (regexp (rxx-inst-regexp aregexp)))
+      (unless partial-match-ok
+	(if (not (featurep 'xemacs))
+	    (setq regexp (concat "\\`\\(?:" regexp "\\)\\'"))
+	  (let ((pfx (if (and (> (length regexp) 0) (eq (aref regexp 0) ?^)) "" "\\`"))
+		(sfx (if (and (> (length regexp) 0) (eq (aref regexp (1- (length regexp))) ?$)) "" "\\'")))
+	    (setq regexp (concat pfx regexp sfx)))))
+      (if (not (funcall (if (elu-when-bound rxx-posix) 'posix-string-match 'string-match)
+			regexp s))
+	  (unless error-ok
+	    (message "was matching regexp %s to string %s" regexp s)
+	    (signal 'rxx-parse-error (list (format "%s: No match" error-msg))))
 	(let (no-parse)
 	  (unless partial-match-ok
 	    (unless (= (match-beginning 0) 0)
 	      (if error-ok (setq no-parse t) (signal 'rxx-parse-error (list (format "%s: match starts at %d" error-msg (match-beginning 0))))))
 	    (unless (= (match-end 0) (length s))
-	      (if error-ok (setq no-parse t) (signal 'rxx-parse-error (list (format "%s: match ends at %d" error-msg (match-end 0)))))))
+	      (if error-ok (setq no-parse t)
+		(message "was matching regexp %s to string %s" regexp s)
+		(signal 'rxx-parse-error (list (format "%s: match ends at %d" error-msg (match-end 0)))))))
 	  (unless no-parse
 	      (rxx-call-parser rxx-inst s)))))))
 
