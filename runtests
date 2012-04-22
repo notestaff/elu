@@ -1,8 +1,19 @@
 set -e
 set -o pipefail
+
+rm -f *.elc
+
 emacs -Q --batch --eval "(require 'cl)" -l elu.el -l rxx.el -l elu-valu.el -l elu-valu-test.el -f elu-valu-run-tests
 emacs -Q --batch --eval "(require 'cl)" -l elu.el -l rxx.el -l elu-valu.el -l rxx-org.el -f rxx-org-tests
 xemacs -Q --batch -l rx-xemacs.el -l elu.el -l rxx.el -l elu-valu.el -l elu-valu-test.el -f elu-valu-run-tests
 xemacs -Q --batch -l rx-xemacs.el -l elu.el -l rxx.el -l elu-valu.el -l rxx-org.el -f rxx-org-tests
 
+emacs -Q --batch --eval "(require 'cl) (require 'ert)" -L .  -f batch-byte-compile elu.el rxx.el elu-valu.el elu-valu-test.el rxx-org.el
+
+emacs -Q --batch --eval "(require 'cl)" -l elu.elc -l rxx.elc -l elu-valu.elc -l elu-valu-test.el -f elu-valu-run-tests
+emacs -Q --batch --eval "(require 'cl)" -l elu.elc -l rxx.elc -l elu-valu.elc -l rxx-org.elc -f rxx-org-tests
+#xemacs -Q --batch -l rx-xemacs.elc -l elu.elc -l rxx.elc -l elu-valu.elc -l elu-valu-test.elc -f elu-valu-run-tests
+#xemacs -Q --batch -l rx-xemacs.elc -l elu.elc -l rxx.elc -l elu-valu.elc -l rxx-org.elc -f rxx-org-tests
+
+rm -f *.elc
 

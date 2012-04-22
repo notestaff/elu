@@ -25,6 +25,9 @@
 (when (featurep 'xemacs)
   (defmacro should (x) `(assert ,x)))
 
+(unless (featurep 'xemacs)
+  (declare-function should "ert.el" (form)))
+
 (defun elu-valu-do-tests ()
   (dolist (td elu-valu-parse-test-defs)
     (message "trying test def: %s" td)

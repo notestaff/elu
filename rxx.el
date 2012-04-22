@@ -468,9 +468,10 @@ Fields:
 "
   name imports)
 
-(defun rxx-namespace-global-var (name)
-  "Construct the name of the global var storing the given namespace"
-  (intern (concat (symbol-name name) "-rxx-namespace")))
+(eval-and-compile
+  (defun rxx-namespace-global-var (name)
+    "Construct the name of the global var storing the given namespace"
+    (intern (concat (symbol-name name) "-rxx-namespace"))))
 
 (defmacro* def-rxx-namespace (name &optional (descr (concat "Namespace" (symbol-name name))) &key imports)
   "Define an rxx namespace.  Each rxx-regexp define using `def-rxx-regexp' belongs to a particular
@@ -488,9 +489,10 @@ Params:
      (make-rxx-namespace :name (quote ,name) :imports (quote ,(elu-make-seq imports)))
      ,descr))
 
-(defun rxx-def-global-var (namespace name)
-  "Construct the name of the global var storing the given rxx-def"
-  (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def")))
+(eval-and-compile
+  (defun rxx-def-global-var (namespace name)
+    "Construct the name of the global var storing the given rxx-def"
+    (intern (concat (symbol-name namespace) "-" (symbol-name name) "-rxx-def"))))
 
 (defmacro* def-rxx-regexp (namespace name-and-opts descr form &optional (parser 'identity)
 				     (filter t)
@@ -636,7 +638,7 @@ the parsed object matched by this named group."
 ;; in `rxx-instantiate', rather than being explicitly defined.
 ;; They reference the original functions from the `rx' package
 ;; temporarily overridden during the `rxx-instantiate' call.
-(when (fboundp 'declare-function)
+(unless (featurep 'xemacs)
   (declare-function rx-form-orig "rxx.el" t 'fileonly)
   (declare-function rx-submatch-orig "rxx.el" t 'fileonly)
   (declare-function rx-regexp-orig "rxx.el" t 'fileonly)

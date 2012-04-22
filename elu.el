@@ -60,6 +60,14 @@
   :group 'elu
   :type 'bool)
 
+
+;; Forward function declarations
+(unless (featurep 'xemacs)
+  (declare-function elu-delete-dups "elu.el" (list))
+  (declare-function elu-regexp-opt-group "elu.el" (strings &optional paren lax))
+  (declare-function elu-regexp-opt-charset "elu.el" (chars))
+  (declare-function elu-subregexp-context-p "elu.el" (regexp pos &optional start)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Functions defined here so they can be used in other definitions
@@ -417,7 +425,7 @@ Merges keywords to avoid backtracking in Emacs's regexp matcher."
 		     (half2 (nthcdr (length half1) strings)))
 		(concat open-group
 			(elu-regexp-opt-group half1)
-			"\\|" (regexp-opt-group half2)
+			"\\|" (elu-regexp-opt-group half2)
 			close-group)))))))))))
 
 (if (fboundp 'regexp-opt-charset)
@@ -667,16 +675,6 @@ to function calls."
 		 ))))
 	(split-string (buffer-string) "\n"))))))
 
-(defmacro elu-assert-equal (expr1 expr2)
-  "If EXPR1 and EXPR2 are not `equal', print the expressions and their values
-and abort with an error."
-  (elu-with-new-symbols (expr1val expr2val)
-    `(let ((,expr1val ,expr1) (,expr2val ,expr2))
-       (unless (equal ,expr1val ,expr2val)
-	 (error "Not equal but should be: \n%s=%s\n%s=%s\n"
-		(format "%s" (quote ,expr1)) ,expr1val 
-		(format "%s" (quote ,expr2)) ,expr2val)))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Macro-writing helpers
@@ -695,6 +693,15 @@ macros. "
 			    (elu-make-seq symbols)))
 	  forms))
 
+(defmacro elu-assert-equal (expr1 expr2)
+  "If EXPR1 and EXPR2 are not `equal', print the expressions and their values
+and abort with an error."
+  (elu-with-new-symbols (expr1val expr2val)
+    `(let ((,expr1val ,expr1) (,expr2val ,expr2))
+       (unless (equal ,expr1val ,expr2val)
+	 (error "Not equal but should be: \n%s=%s\n%s=%s\n"
+		(format "%s" (quote ,expr1)) ,expr1val 
+		(format "%s" (quote ,expr2)) ,expr2val)))))
 
 (defmacro elu-with-gensyms (symbols &rest body)
   "Execute BODY in a context where the variables in SYMBOLS are bound to
