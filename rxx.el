@@ -999,6 +999,10 @@ then don't need the special recurse form."
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun rxx-reject-match ()
+  "A parser should call this to reject a match"
+  (throw 'rxx-reject-match :rxx-reject-match))
+
 (defun* rxx-string-match (rxx-def string &optional start)
   "Find the first match for RXX-DEF in STRING."
 
@@ -1010,9 +1014,12 @@ then don't need the special recurse form."
 	(unless match-start-pos (return-from rxx-string-match nil))
 	;; validate the match.
 	;; this is similar to parsing.
-
-	
-	
+	(let ((parse-result
+	       (catch 'rxx-reject-match
+		 (rxx-call-parser rxx-inst string))))
+	  (if (not (eq parse-result :rxx-reject-match))
+	    (return-from rxx-string-match parse-result)
+	    (setq start (1+ match-start-pos))))
       )
     )
   ))
