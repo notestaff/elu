@@ -55,7 +55,7 @@
 ;;;;;;;;;;;;;;;
 
 (def-rxx-namespace elu-valu
-  "Values with units")
+  "Values with units" :imports std)
 
 
 (defun elu-valu-do-sum (start-value seq)
@@ -201,7 +201,7 @@ a newly created valu representing the difference of VALU1 and VALU2."
 (def-rxx-regexp elu-valu number-name
   "The string name of a number, for the few numbers often written as words.
 Parsed as the numeric value of the number."
-  (eval-regexp (elu-regexp-opt (mapcar 'symbol-name (mapcar 'car elu-valu-number-names))))
+  (word-from-list ((mapcar 'car elu-valu-number-names)))
   (lambda (match) (cdr-safe (assoc (intern match) elu-valu-number-names))))
 
 (def-rxx-regexp elu-valu number-name-range
@@ -258,7 +258,7 @@ such as $5 into the canonical form `5 dollars'.  Each hook must take a string as
 
 (def-rxx-regexp elu-valu unit
   "A unit name.   See customization variable "
-  (eval-regexp (elu-regexp-opt (mapcar 'symbol-name (mapcar 'car elu-valu-unit2dim-alist)))))
+  (word-from-list ((mapcar 'car elu-valu-unit2dim-alist))))
 
 (def-rxx-regexp elu-valu valu "Value with unit"
   ;; Either a number optionally followed by a unit (unit assumed to be "item" if not given),
