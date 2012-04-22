@@ -36,8 +36,6 @@
 ;;
 ;; See also: `elu-test.el'.
 
-(require 'rx)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Section: Customizations 
@@ -662,7 +660,9 @@ to function calls."
 	  (not
 	   (or (not funcs-only)
 	       (save-match-data
-		 (string-match (rx (seq string-start (0+ space) (group (1+ (not (any space))))  "(")) s)
+		 (string-match
+		  "\\`\\s-*\\(\\S-+\\)("
+		  s)
 					;(symbol-function (intern (match-string 1)))
 		 ))))
 	(split-string (buffer-string) "\n"))))))
@@ -777,12 +777,16 @@ remaining fields taking values from STRUCT.   CLAUSES has the form :field1 val1 
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defun elu-to-string (x)
+  "Return a string representation of the object X"
+  (format "%s" x))
+
 (defun elu-trim-whitespace (s)
   "Trim trailing and leading whitespace from string"
   (save-match-data
-    (replace-regexp-in-string (rx (group (or (seq bos (1+ space))
-					     (seq (1+ space) eos))))
-     "" (if (symbolp s) (symbol-name s) s))))
+    (replace-regexp-in-string
+     "\\`\\s-+\\|\\s-+\\'"
+     "" s)))
 
 (defun elu-not-blank (s)
   "Return nil if S is nil or a blank string, else return S."
