@@ -26,7 +26,17 @@
 ;;
 ;;; Commentary:
 ;;
-;; General-purpose Emacs utilities.  Also includes some functions present
+;; General-purpose Emacs utilities.
+;;
+;; Categories of functions include:
+;;
+;;   - Alternate to advice
+;;
+;;   - Portability aids
+;;       - Functions in GNU Emacs but not XEmacs
+;;       - Functions in cl package
+;;
+;;Also includes some functions present
 ;; in GNU Emacs but not XEmacs; putting them into the elu namespace
 ;; helps write portable code.
 ;; Also, includes some functions taken from the CL package, but
@@ -336,7 +346,9 @@ Copied from `regexp-opt' in GNU Emacs."
   "Return a regexp to match a string in the sorted list STRINGS.
 If PAREN non-nil, output regexp parentheses around returned regexp.
 If LAX non-nil, don't output parentheses if it doesn't require them.
-Merges keywords to avoid backtracking in Emacs's regexp matcher."
+Merges keywords to avoid backtracking in Emacs's regexp matcher.
+
+Copied from `regexp-opt-group' in GNU Emacs."
   ;; The basic idea is to find the shortest common prefix or suffix, remove it
   ;; and recurse.  If there is no prefix, we divide the list into two so that
   ;; \(at least) one half will have at least a one-character common prefix.
@@ -431,7 +443,8 @@ Merges keywords to avoid backtracking in Emacs's regexp matcher."
 (if (fboundp 'regexp-opt-charset)
     (defalias 'elu-regexp-opt-charset 'regexp-opt-charset)
 (defun elu-regexp-opt-charset (chars)
-  "Return a regexp to match a character in CHARS."
+  "Return a regexp to match a character in CHARS.
+Copied from `regexp-opt-charset' in GNU Emacs."
   ;; The basic idea is to find character ranges.  Also we take care in the
   ;; position of character set meta characters in the character set regexp.
   ;;
@@ -486,7 +499,10 @@ Merges keywords to avoid backtracking in Emacs's regexp matcher."
 
 
 (if (fboundp 'subregexp-context-p)
-    (defalias 'elu-subregexp-context-p 'subregexp-context-p)
+    ;(defalias 'elu-subregexp-context-p 'subregexp-context-p)
+    (defun elu-subregexp-context-p (regexp pos &optional start)
+      (save-match-data
+       (subregexp-context-p regexp pos start)))
 (defun elu-subregexp-context-p (regexp pos &optional start)
   "Return non-nil if POS is in a normal subregexp context in REGEXP.
 A subregexp context is one where a sub-regexp can appear.
@@ -499,14 +515,15 @@ Copied from `subregexp-context-p' in GNU Emacs."
   ;; reuses the regexp-matcher's own parser, so it understands all the
   ;; details of the syntax.  A disadvantage is that it needs to match the
   ;; error string.
-  (condition-case err
-      (progn
-        (string-match (substring regexp (or start 0) pos) "")
-        t)
-    (invalid-regexp
-     (not (member (cadr err) '("Unmatched [ or [^"
-                               "Unmatched \\{"
-                               "Trailing backslash")))))
+  (save-match-data
+   (condition-case err
+       (progn
+	 (string-match (substring regexp (or start 0) pos) "")
+	 t)
+     (invalid-regexp
+      (not (member (cadr err) '("Unmatched [ or [^"
+				"Unmatched \\{"
+				"Trailing backslash"))))))
   ;; An alternative implementation:
   ;; (defconst re-context-re
   ;;   (let* ((harmless-ch "[^\\[]")
@@ -634,7 +651,7 @@ Copied from `replace-regexp-in-string' in GNU Emacs.
 
 
 (defmacro elu-dbg (&rest exprs)
-  "Print the values of exprs, so you can write e.g. (dbg a b) to print 'a=1 b=2'.
+  "Print the values of EXPRS, so you can write e.g. (dbg a b) to print 'a=1 b=2'.
 Returns the value of the last expression."
   `(let ((expr-vals (list ,@exprs)))
      (when (>= elu-dbg-level 1)
@@ -728,17 +745,17 @@ Adapted from URL http://www.emacswiki.org/emacs/macro-utils.el ."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Section: Utilities for working with structs (defined by `defstruct').
+;; Section: Utilities for working with structs (defined by `cl-defstruct').
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defmacro elu-with (struct-type struct fields  &rest body)
-  "Locally bind fields FIELDS of structure STRUCT of type STRUCT-TYPE (defined by `defstruct') for easy access.
+  "Locally bind fields FIELDS of structure STRUCT of type STRUCT-TYPE (defined by `cl-defstruct') for easy access.
 FIELDS is a list of fields; each field is aliased to a local variable of the same name, then BODY forms are executed.
 Setting these local variables will set the corresponding fields of STRUCT.
 
 For example, if you had
-\(defstruct my-struct a b)
+\(cl-defstruct my-struct a b)
 ...
 \(setq x (make-my-struct :a 1 :b 2))
 then you could write
@@ -1169,7 +1186,7 @@ Shorthand for (let ((var1 var1) (var2 var2)) forms)."
   (list 'let (mapcar (lambda (var) (list var var)) vars)
 	(cons 'progn forms)))
 
-(defstruct elu-loc
+(cl-defstruct elu-loc
   "A buffer and a position in that buffer.  Unlike for a marker, the position is not
 updated as the buffer is edited, so you can created as many of these as you want without
 slowing down emacs and not worry about manually disposing of them after use
@@ -1205,7 +1222,7 @@ of creation, so it can detect when it is no longer valid."
   "Return an elu-loc for (point-max)"
   (make-elu-loc :position (point-max)))
 
-(defstruct
+(cl-defstruct
   (elu-loc-range
    (:constructor nil)
    (:constructor
@@ -1314,7 +1331,7 @@ buffers (either `switch-to-buffer' or`set-buffer')."
 ;;    'eval
 ;;     (append (list 'destructuring-bind args  (list 'quote expr)) body)))
 
-(defstruct elu-ratio
+(cl-defstruct elu-ratio
   "A ratio of two things."
   numer denom)
 

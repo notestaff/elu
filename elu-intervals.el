@@ -31,7 +31,7 @@
 (require 'elu)
 (eval-when-compile (require 'cl))
 
-(defstruct elu-interval
+(cl-defstruct elu-interval
   "A time interval.  Not necessarily continuous,
 i.g. could be a collection of intervals.
 Abstractly, just a set of time points, and most operations
@@ -58,7 +58,7 @@ Fields:
      separator)))
 
 
-(defstruct elu-intervals
+(cl-defstruct elu-intervals
   "A set of intervals, with operations for quickly finding
 intervals intersecting a given point or interval.
 

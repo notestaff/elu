@@ -32,7 +32,7 @@
 (require 'ert)
 (eval-when-compile (require 'cl))
 
-(defstruct elu-test a b c)
+(cl-defstruct elu-test a b c)
 
 (ert-deftest elu-test-suite ()
   "Test various utilities in the elu module"

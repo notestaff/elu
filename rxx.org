@@ -146,3 +146,13 @@
 *** Other points to make
 
 	 Order
+
+* Summary of features
+
+*** Define regexps as readable, reusable abstractions
+
+*** Match balanced parens
+
+*** Add arbitrary filters (though backtracking there can be limited / inefficient)
+
+

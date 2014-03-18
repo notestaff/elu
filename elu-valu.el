@@ -134,7 +134,7 @@ units are measured; for example, for time we use minutes."
   (elu-assoc-val unit elu-valu-unit2base-alist))
 
 ;; Struct: elu-valu - a value together with a given unit of measurement, e.g., 5 hours. 
-(defstruct (elu-valu
+(cl-defstruct (elu-valu
 	    (:constructor create-elu-valu
 			  (val unit-name
 			       &aux (unit
@@ -287,7 +287,7 @@ such as $5 into the canonical form `5 dollars'.  Each hook must take a string as
     (cons (new-elu-valu (car number-range) unit)
 	  (new-elu-valu (cdr number-range) unit))))
 
-(defstruct (elu-valu-ratio (:include elu-ratio)))
+(cl-defstruct (elu-valu-ratio (:include elu-ratio)))
 
 (def-rxx-regexp elu-valu ratio-word "A word separating the numerator and denominator of a fraction."
   (or "per" "every" "each" "for every" "for each" "/" "a" "in a"))

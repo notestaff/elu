@@ -161,6 +161,7 @@ compatibility.  Adapted from `org-re'."
   "Return a new regexp that makes all groups in REGEXP shy; and
 wrap a shy group around the returned REGEXP.  WARNING: this will
 kill any backrefs!  Adapted from `regexp-opt-depth'."
+  ;(message "making shy: %s" regexp)
   (save-match-data
     (assert (not (string-match "\\\\[1-9]" regexp))
 	    nil "rxx-make-shy: does not work on regexps with backrefs")
@@ -196,7 +197,7 @@ kill any backrefs!  Adapted from `regexp-opt-depth'."
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct
+(cl-defstruct
   rxx-def
   "The definition of an rxx regexp.
 Brings together the symbolic definition of the regexp and the parser code to parse
@@ -212,6 +213,17 @@ Fields:
    PARSER - the parser for this regexp, that turns its matches into programmatic
      objects.  Either a lisp form, or a one-argument function.  Can refer to the
      result of parsing named subgroups by the subgroup names.
+
+   FILTER - the validator for this regexp.  This is a way to specify arbitrary
+     constraints on the regexp, ones that are hard or impossible to express using
+     the standard regexp constructs.   It can look at the context of the match,
+     by looking at rxx-match-target and rxx-match-beg and rxx-match-end.
+
+     The validator should return t if the match is ok, nil
+     otherwise.  It can also return a refinement: the locations of one or more
+     alternate matches.  In that case the match will be retried with these
+     matches and same start point, before looking for a match further down.
+
    ARGS - argument list (Common Lisp-style) for instantiating this definition
    CASE-FOLD-SEARCH - how case sensitivity should be handled when matching this regexp.
      If nil, force case-sensitive search; if t, force case-insensitive search; if 'default,
@@ -224,11 +236,12 @@ Fields:
   ;; other things to store here:
   ;; case-sens, posix-search, 
   
-  (namespace (elu-when-bound rxx-cur-namespace)) name descr form (parser 'identity) args case-fold-search posix-search)
+  (namespace (elu-when-bound rxx-cur-namespace)) name descr form (parser 'identity) args case-fold-search posix-search
+  (filter t))
 
 
 
-(defstruct rxx-inst
+(cl-defstruct rxx-inst
   "A particular instantiation of an `rxx-def', either at the
 top level or as part of a larger regexp.  When `rxx-instantiate' analyzes an
 sexp defining a regexp, it creates one `rxx-inst' for the overall
@@ -244,8 +257,10 @@ Fields:
      NUM - the numbered group corresponding to matches of this rxx-inst within the larger regexp (as would be passed to `match-string').
      REGEXP - the regexp string, as passed to `string-match' etc.
      ACTUAL-ARGS - the actual args, if any, used to instantiate a parameterized regexp
+     EXTENT-PROP - an uninterned symbol for the text property that covers the extent of this regexp instantiation
+        within the larger regexp.   Lets us keep track of where in the larger regexp this regexp instantiation was inserted.
 "
-  def env num regexp actual-args)
+  def env num regexp actual-args extent-prop)
 
 (defun rxx-inst-form (rxx-inst)
   "Returns the symbolic definition of the rxx-regexp that RXX-INST instantiates."
@@ -366,9 +381,24 @@ passed in as AREGEXP. "
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
 (defun rxx-call-parser (rxx-inst &optional rxx-object)
   "Call the parser to parse the given match string."
   (let ((match-str (match-string (or (rxx-inst-num rxx-inst) 0) rxx-object))
+
+
+	;; if needed, check that case matches, and if not, reject the match.
+	;; needed if:
+	;;   - this rxx-regexp is case-sensitive
+	;;   - and it was not searched case-sensitively
+	;;     (that last one should be scoped-in).
+
+	;; but if no match, we throw an rxx-reject-match.
+	;; so, we pass down under what case-sensitive we searched.
+
+	;; and if we check for a case-sens match, then from then on we pass down
+	;; as if we searched under case-sens.
+	
 	(rxx-env (rxx-inst-env rxx-inst)))
     ;; For each named subgroup, recursively parse what
     ;; it matched and assign the resulting parsed object
@@ -458,7 +488,7 @@ passed in via AREGEXP."
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defstruct rxx-namespace
+(cl-defstruct rxx-namespace
   "A namespaces for regexps.
 
 Fields:
@@ -530,7 +560,7 @@ refer to the list of parsed matches as G-LIST.
 "
   `(defconst ,(rxx-def-global-var namespace name)
      (make-rxx-def :namespace (quote ,namespace) :name (quote ,name) :descr ,descr
-		   :form (quote ,form) :parser (quote ,parser) :args (quote ,args)
+		   :form (quote ,form) :parser (quote ,parser) :filter (quote ,filter) :args (quote ,args)
 		   :case-fold-search (quote ,case-fold-search-val) :posix-search (quote ,posix-search))
      ,descr))
 
@@ -864,6 +894,8 @@ return the list of parsed numbers, omitting the blanks.   See also
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(cl-defstruct rxx-refined-regexp-holder refined-regexp timestamp)
+
 (defun rxx-instantiate-no-args (rxx-def actual-args grp-num parent-env)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
 extensions.  The extensions, taken together, allow specifying simple grammars
@@ -889,6 +921,7 @@ then don't need the special recurse form."
 ;; and our-paren-expr matches just the expr structure but then calls parse to parse what's inside.
 
 ;; advantage is that this is all regexps.  and can even insist on proper ones.
+;(message "constituents: %s" rx-constituents)
     (let* ((rxx-cur-namespace (rxx-def-namespace rxx-def))
 	   (rxx-env (rxx-new-env parent-env))
 	   (rxx-num-grps-bef rxx-num-grps)
@@ -903,14 +936,17 @@ then don't need the special recurse form."
 		;; in the form, it calls back to rxx-process-named-grp, which will
 		;; add a mapping from the group's name to rxx-inst structure
 		;; to rxx-env.
-		(rx-to-string (rxx-def-form rxx-def) 'no-group))))))
+		(rx-to-string (rxx-def-form rxx-def) 'no-group)))))
+	   (extent-prop (make-symbol "extent-prop")))
       (assert (= (- rxx-num-grps rxx-num-grps-bef) (elu-regexp-opt-depth regexp)))
+      (put-text-property 0 (length regexp) extent-prop (or grp-num t) regexp)
       (rxx-check-regexp-valid regexp)
 		(make-rxx-inst :def rxx-def 
-							:env rxx-env
-							:actual-args actual-args
-							:regexp regexp
-							:num grp-num )))
+			       :env rxx-env
+			       :actual-args actual-args
+			       :regexp regexp
+			       :num grp-num
+			       :extent-prop extent-prop)))
 
 (defun rxx-instantiate-no-args-top-level (rxx-def actual-args)
   "Construct a regexp from its readable representation as a lisp FORM, using the syntax of `rx-to-string' with some
@@ -1000,11 +1036,21 @@ then don't need the special recurse form."
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defun rxx-reject-match ()
-  "A parser should call this to reject a match"
+  "A parser may call this to reject a match."
   (throw 'rxx-reject-match :rxx-reject-match))
 
+(defun rxx-refine-match (variants)
+  "A parser may call this to request refining a match."
+  
+  )
+
 (defun* rxx-string-match (rxx-def string &optional start)
-  "Find the first match for RXX-DEF in STRING."
+  "Find the first match for rxx-regexp RXX-DEF in STRING, starting from position START.
+The definition RXX-DEF will be instantiated using any current variable values on which
+it depends.
+
+Returns a parse of the match.
+"
 
   (let ((rxx-inst (rxx-instantiate-top-level rxx-def)))
     ;; set case-fold-search as needed
@@ -1181,7 +1227,7 @@ in namespace NAMESPACE."
    (seq (eval left-paren) (minimal-match (named-grp between-parens (0+ (eval-rxx mid-expr)))) (eval right-paren))
    between-parens))
 
-(defstruct rxx-parsed-obj
+(cl-defstruct rxx-parsed-obj
   "An object that was parsed from a text string.
 
 Fields:
